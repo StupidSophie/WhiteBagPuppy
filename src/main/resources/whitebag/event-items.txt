@@ -1,0 +1,79 @@
+# White Bag Pup holiday items: event|usual months|tier|item (from the RealmEye wiki, 2026-10-09)
+Anniversary|6,7|UT|Venerable Ancient Stone Sword
+Anniversary|6,7|UT|Venerable Coral Silk Armor
+Anniversary|6,7|UT|Venerable Crystal Wand
+Anniversary|6,7|UT|Venerable Doku No Ken
+Anniversary|6,7|UT|Venerable Doom Bow
+Anniversary|6,7|UT|Venerable Resurrected Warrior's Armor
+Anniversary|6,7|UT|Venerable Robe of the Mad Scientist
+Anniversary|6,7|UT|Venerable Spirit Dagger
+Anniversary|6,7|UT|Venerable Staff of the Crystal Serpent
+Easter|3,4|UT|Carrotroot Vestments
+Easter|3,4|UT|Eggshell Carapace
+Easter|3,4|UT|Fudgeclad Armor
+Eternal Phoenix||UT|Ashen Talon
+Eternal Phoenix||UT|Blade of Eternal Rebirth
+Eternal Phoenix||UT|Bloom-Fire Scepter
+Eternal Phoenix||UT|Crest of the Rising Sun
+Eternal Phoenix||UT|Solar Flare Igniter
+Eternal Phoenix||UT|Sovereign Cinder-Blade
+Halloween|10,11|ST|Executioner's Garb
+Halloween|10,11|ST|Gravekeeper's Scythe
+Halloween|10,11|ST|Hooded Skull
+Halloween|10,11|ST|Immortal Mantle
+Halloween|10,11|ST|Spectral Spell
+Halloween|10,11|ST|Supernatural Staff
+Halloween|10,11|UT|Bachelor's Tuxedo
+Halloween|10,11|UT|Big Bad Fursuit
+Halloween|10,11|UT|Bow of Nightmares
+Halloween|10,11|UT|Corrupted Cleaver
+Halloween|10,11|UT|Dagger of the Terrible Talon
+Halloween|10,11|UT|Esoteric Buckler
+Halloween|10,11|UT|Haori of the Wind
+Halloween|10,11|UT|Holy Order's Habit
+Halloween|10,11|UT|Platinum Segmentata
+Halloween|10,11|UT|Red Riding Dress
+Halloween|10,11|UT|Skull-splitter Sword
+Halloween|10,11|UT|Staff of Horrific Knowledge
+Halloween|10,11|UT|Sweettreats Bow
+Halloween|10,11|UT|Sweettreats Dagger
+Halloween|10,11|UT|Sweettreats Katana
+Halloween|10,11|UT|Sweettreats Staff
+Halloween|10,11|UT|Sweettreats Sword
+Halloween|10,11|UT|Sweettreats Wand
+Halloween|10,11|UT|Wand of Ancient Terror
+Lunar New Year|1,2|UT|Dragon Mace
+Lunar New Year|1,2|UT|Dragon Slayer
+Lunar New Year|1,2|UT|Joker Timbrel
+Lunar New Year|1,2|UT|The Heart of the Dragon
+Lunar New Year|1,2|UT|Tome of the Dragon
+Mad God Mayhem||UT|Barely Attuned Magic Thingy
+Mad God Mayhem||UT|Krathana
+Mad God Mayhem||UT|Lethargic Sentience
+Mad God Mayhem||UT|Precisely Calibrated Stringstick
+Mad God Mayhem||UT|Random Spell Extraction Device
+Mad God Mayhem||UT|Silex's Hammer
+Mad God Mayhem||UT|Toy Knife
+Mad God Mayhem||UT|Unstable Anomaly
+Oryxmas|12,1|UT|An Icicle
+Oryxmas|12,1|UT|Bow of Eternal Frost
+Oryxmas|12,1|UT|Enchanted Ice Blade
+Oryxmas|12,1|UT|Frost Storm Bow
+Oryxmas|12,1|UT|Frostbite
+Oryxmas|12,1|UT|Frozen Wand
+Oryxmas|12,1|UT|Present Dispensing Wand
+Oryxmas|12,1|UT|Salju
+Oryxmas|12,1|UT|Snow Branch
+Oryxmas|12,1|UT|Snowflake Blade
+Oryxmas|12,1|UT|Staff of Yuletide Carols
+Other events||ST|Cane of the Void
+Other events||ST|Darkness Overcoat
+Other events||ST|Void Leeches
+Other events||UT|Eternal Echo
+Other events||UT|Mimicry Trap
+Other events||UT|Prismimic
+Other events||UT|Trap of the Blood Spirit
+Season missions||UT|Hookblade Tachi
+Summer festival|7,8|UT|Kagenohikari
+Summer festival|7,8|UT|Makakoyumi
+Summer festival|7,8|UT|Tezutsu Hanabi

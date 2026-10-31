@@ -1,0 +1,248 @@
+package whitebag;
+
+import javax.swing.*;
+import java.awt.*;
+import java.awt.geom.Ellipse2D;
+import java.awt.geom.GeneralPath;
+import java.awt.geom.RoundRectangle2D;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+import java.util.Map;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
+
+import static whitebag.AboutMe.heading;
+import static whitebag.AboutMe.left;
+import static whitebag.AboutMe.note;
+
+/** The Badges tab: the pup's achievements, unlocked ones in colour with the date, the rest with progress. */
+final class BadgesPage extends MoreTabs.Page {
+    private final Supplier<String> account;
+    private final Predicate<String> mine;
+    /** Whether new badges get posted to Discord (setting badges.post), and a way to change it. */
+    static volatile java.util.function.BooleanSupplier posting = () -> true;
+    static volatile java.util.function.Consumer<Boolean> setPosting = b -> { };
+    /** Checks for newly earned badges (set by the main window), run when the page is opened. */
+    Runnable checkNow = () -> { };
+    private static final String[] SHOW = {"Up next", "Unlocked", "All", "Dungeons"};
+    private int show = 0;
+
+    BadgesPage(Supplier<String> account, Predicate<String> mine) {
+        this.account = account;
+        this.mine = mine;
+        addHierarchyListener(e -> {
+            if ((e.getChangeFlags() & java.awt.event.HierarchyEvent.SHOWING_CHANGED) != 0 && isShowing()) {
+                checkNow.run();
+                changed();
+            }
+        });
+    }
+
+    @Override
+    void fill() {
+        String key = account.get();
+        Map<String, Badges.Unlock> got = key == null ? java.util.Collections.emptyMap() : Badges.unlocked(key);
+        int n = 0;
+        for (Badges.Badge b : Badges.ALL) if (got.containsKey(b.id)) n++;
+        list.add(heading("badges", n + " of " + Badges.ALL.size()));
+        gap(8);
+        if (key == null || key.isEmpty()) {
+            list.add(note("Start watching and load into the game once, and your badges show up here."));
+            return;
+        }
+        Badges.Stats s = Badges.stats(key, mine);
+        list.add(new AboutMe.AbilityBar("Badges unlocked", n + " / " + Badges.ALL.size(), n / (double) Badges.ALL.size()));
+        gap(8);
+        Pixel.Check post = new Pixel.Check("Post new badges to Discord", posting.getAsBoolean());
+        post.addActionListener(e -> setPosting.accept(post.isSelected()));
+        list.add(left(post));
+        gap(12);
+        JPanel showRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        showRow.setOpaque(false);
+        showRow.add(new LogTabs.Segments(SHOW, show, i -> {
+            show = i;
+            changed();
+        }));
+        showRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, showRow.getPreferredSize().height));
+        list.add(left(showRow));
+        gap(10);
+        JPanel grid = new JPanel(new GridLayout(0, 2, 12, 12));
+        grid.setOpaque(false);
+        // unlocked first (newest first), then the closest to unlocking
+        java.util.List<Badges.Badge> order = new java.util.ArrayList<>(Badges.ALL);
+        order.sort((a, b) -> {
+            Badges.Unlock ua = got.get(a.id), ub = got.get(b.id);
+            if ((ua != null) != (ub != null)) return ua != null ? -1 : 1;
+            if (ua != null) return Long.compare(ub.at, ua.at);
+            double pa = Math.min(1, a.count.of(s) / (double) a.need), pb = Math.min(1, b.count.of(s) / (double) b.need);
+            return Double.compare(pb, pa);
+        });
+        int shown = 0;
+        for (Badges.Badge b : order) {
+            boolean on = got.containsKey(b.id);
+            boolean dungeon = b.id.startsWith("e-visit-") || b.id.startsWith("e-bag-") || b.id.startsWith("e-run5-");
+            if (show == 0 && on || show == 1 && !on || show == 3 && !dungeon) continue;
+            if (show == 0 && shown >= 60) break; // the 60 closest to unlocking; the other views show everything
+            grid.add(new Card(b, got.get(b.id), Math.min(b.need, b.count.of(s))));
+            shown++;
+        }
+        if (shown == 0) {
+            list.add(note(show == 1 ? "No badges unlocked yet: play a bit and they'll pop up here." : "You've unlocked every badge here!"));
+            gap(6);
+        }
+        grid.setMaximumSize(new Dimension(Integer.MAX_VALUE, grid.getPreferredSize().height));
+        list.add(left(grid));
+        gap(10);
+        list.add(note("Badges are worked out from what the pup has logged (bags, runs, kills, fame, play time, your collection, "
+                + "trades, puzzles and pets). Ones you'd already earned before badges existed are unlocked quietly."));
+    }
+
+    /** One badge: a medal, its name and what it's for, and the date or how close you are. */
+    static final class Card extends JComponent {
+        private final Badges.Badge b;
+        private final Badges.Unlock u;
+        private final long have;
+
+        Card(Badges.Badge b, Badges.Unlock u, long have) {
+            this.b = b;
+            this.u = u;
+            this.have = have;
+            setPreferredSize(new Dimension(300, 74));
+        }
+
+        @Override
+        protected void paintComponent(Graphics g0) {
+            Graphics2D g = (Graphics2D) g0.create();
+            Cute.smooth(g);
+            int w = getWidth(), h = getHeight();
+            boolean on = u != null;
+            g.setColor(on ? Cute.mix(Theme.WHITE, b.tier.color, 0.10) : Theme.c(0xF7F5FA));
+            g.fill(new RoundRectangle2D.Double(0, 0, w, h, 16, 16));
+            g.setColor(on ? b.tier.color : Theme.c(0xE2DCEA));
+            g.setStroke(new BasicStroke(on ? 2.2f : 1.4f));
+            g.draw(new RoundRectangle2D.Double(1, 1, w - 2, h - 2, 15, 15));
+            medal(g, 12, 10, 50, b, on);
+            int tx = 74;
+            g.setFont(Cute.font(Font.BOLD, 14));
+            g.setColor(on ? Pixel.INK : Theme.c(0x8A7F99));
+            String nm = b.name;
+            FontMetrics nfm = g.getFontMetrics();
+            while (nfm.stringWidth(nm) > w - tx - 10 && nm.length() > 6) nm = nm.substring(0, nm.length() - 2);
+            g.drawString(nm.equals(b.name) ? nm : nm + "…", tx, 24);
+            g.setFont(Cute.font(Font.PLAIN, 12));
+            String d = b.desc;
+            FontMetrics fm = g.getFontMetrics();
+            while (fm.stringWidth(d) > w - tx - 10 && d.length() > 6) d = d.substring(0, d.length() - 2);
+            g.drawString(d.equals(b.desc) ? d : d + "…", tx, 42);
+            if (on) {
+                g.setFont(Cute.font(Font.BOLD, 11));
+                g.setColor(Cute.mix(b.tier.color, Theme.BLACK, 0.25));
+                g.drawString(u.quiet ? "Unlocked (earned before badges)" : "Unlocked " + new SimpleDateFormat("d MMM yyyy", Locale.ROOT).format(new Date(u.at * 1000L)), tx, 60);
+            } else if (have >= b.need) {
+                // earned, but not checked yet (the pup checks while it's watching the game)
+                g.setFont(Cute.font(Font.BOLD, 11));
+                g.setColor(Pixel.PINK_INK);
+                g.drawString("Ready! Unlocks when you next play", tx, 60);
+            } else {
+                int bw = Math.max(40, w - tx - 70);
+                g.setColor(Theme.c(0xEEE8F3));
+                g.fill(new RoundRectangle2D.Double(tx, 52, bw, 7, 7, 7));
+                g.setColor(Cute.PINK);
+                int fw = (int) Math.round(bw * Math.min(1, have / (double) b.need));
+                if (fw > 0) g.fill(new RoundRectangle2D.Double(tx, 52, Math.max(7, fw), 7, 7, 7));
+                g.setFont(Cute.font(Font.BOLD, 11));
+                g.setColor(Theme.c(0x8A7F99));
+                g.drawString(String.format(Locale.ROOT, "%,d / %,d", have, b.need), tx + bw + 8, 60);
+            }
+            g.dispose();
+            if (!on) setToolTipText(b.desc);
+            else setToolTipText(b.desc);
+        }
+
+        static void medal(Graphics2D g, int x, int y, int s, Badges.Badge b, boolean on) {
+            Color c = on ? b.tier.color : Theme.c(0xD3CCDD);
+            // ribbon
+            g.setColor(on ? Cute.mix(c, Pixel.PINK, 0.5) : Theme.c(0xE4DEEC));
+            GeneralPath rib = new GeneralPath();
+            rib.moveTo(x + s * 0.30, y + s * 0.55);
+            rib.lineTo(x + s * 0.18, y + s * 1.02);
+            rib.lineTo(x + s * 0.34, y + s * 0.92);
+            rib.lineTo(x + s * 0.44, y + s * 1.05);
+            rib.lineTo(x + s * 0.50, y + s * 0.62);
+            rib.lineTo(x + s * 0.56, y + s * 1.05);
+            rib.lineTo(x + s * 0.66, y + s * 0.92);
+            rib.lineTo(x + s * 0.82, y + s * 1.02);
+            rib.lineTo(x + s * 0.70, y + s * 0.55);
+            rib.closePath();
+            g.fill(rib);
+            // coin
+            double r = s * 0.40;
+            double cx = x + s / 2.0, cy = y + s * 0.42;
+            g.setColor(Cute.mix(c, Theme.BLACK, 0.22));
+            g.fill(new Ellipse2D.Double(cx - r, cy - r + 2, r * 2, r * 2));
+            g.setColor(c);
+            if (on && b.tier == Badges.Tier.PRISMATIC) {
+                // a rainbow coin for the hardest badges
+                float[] at = {0f, 0.2f, 0.4f, 0.6f, 0.8f, 1f};
+                Color[] rainbow = {Theme.c(0xFF6FA8), Theme.c(0xFFB347), Theme.c(0xFFE066), Theme.c(0x7BDCB5),
+                        Theme.c(0x6EC6FF), Theme.c(0xB388FF)};
+                g.setPaint(new java.awt.LinearGradientPaint((float) (cx - r), (float) (cy - r), (float) (cx + r), (float) (cy + r), at, rainbow));
+            }
+            g.fill(new Ellipse2D.Double(cx - r, cy - r, r * 2, r * 2));
+            g.setPaint(c);
+            g.setColor(Cute.mix(c, Theme.WHITE, 0.45));
+            g.setStroke(new BasicStroke(2f));
+            g.draw(new Ellipse2D.Double(cx - r + 4, cy - r + 4, r * 2 - 8, r * 2 - 8));
+            g.setColor(on ? Theme.WHITE : Theme.c(0xF4F1F8));
+            if (b.glyph.equals("paw")) {
+                paw(g, cx, cy, s * 0.30);
+                return;
+            }
+            if (b.glyph.equals("bone")) {
+                bone(g, cx, cy, s * 0.34);
+                return;
+            }
+            Font f = Cute.font(Font.BOLD, (int) (s * 0.36));
+            if (f.canDisplayUpTo(b.glyph) != -1) f = new Font("Dialog", Font.BOLD, (int) (s * 0.36)); // ♥ and ★ aren't in Nunito
+            g.setFont(f);
+            FontMetrics fm = g.getFontMetrics();
+            g.drawString(b.glyph, (float) (cx - fm.stringWidth(b.glyph) / 2.0), (float) (cy + fm.getAscent() / 2.0 - 3));
+        }
+    }
+
+    /** A paw print: a big pad and four toes. */
+    static void paw(Graphics2D g, double cx, double cy, double r) {
+        g.fill(new Ellipse2D.Double(cx - r * 0.55, cy - r * 0.05, r * 1.1, r * 0.85));
+        double[][] toes = {{-0.72, -0.35}, {-0.27, -0.72}, {0.27, -0.72}, {0.72, -0.35}};
+        for (double[] t : toes) g.fill(new Ellipse2D.Double(cx + t[0] * r - r * 0.21, cy + t[1] * r - r * 0.24, r * 0.42, r * 0.48));
+    }
+
+    /** A dog bone, at a slant. */
+    static void bone(Graphics2D g, double cx, double cy, double r) {
+        Graphics2D b = (Graphics2D) g.create();
+        b.rotate(-Math.PI / 4, cx, cy);
+        b.fill(new RoundRectangle2D.Double(cx - r * 0.75, cy - r * 0.17, r * 1.5, r * 0.34, r * 0.2, r * 0.2));
+        double k = r * 0.24;
+        for (int sx = -1; sx <= 1; sx += 2) {
+            for (int sy = -1; sy <= 1; sy += 2) b.fill(new Ellipse2D.Double(cx + sx * r * 0.78 - k, cy + sy * r * 0.15 - k, k * 2, k * 2));
+        }
+        b.dispose();
+    }
+
+    /** A medal picture for the Discord post. */
+    static byte[] medalPng(Badges.Badge b) {
+        java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(120, 128, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = img.createGraphics();
+        Cute.smooth(g);
+        Card.medal(g, 10, 6, 100, b, true);
+        g.dispose();
+        try {
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            javax.imageio.ImageIO.write(img, "png", out);
+            return out.toByteArray();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+}
