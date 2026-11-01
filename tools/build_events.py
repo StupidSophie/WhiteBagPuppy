@@ -45,7 +45,7 @@ def main(src, coll, out):
         ev, months = best or OTHER
         rows.append(f"{ev}|{months}|{tier}|{name}")
     with open(out, "w", encoding="utf-8") as f:
-        f.write(f"# White Bag Pup holiday items: event|usual months|tier|item (from the RealmEye wiki, {data.get('generated', '?')})\n")
+        f.write(f"# White Bag Puppy holiday items: event|usual months|tier|item (from the RealmEye wiki, {data.get('generated', '?')})\n")
         for r in sorted(rows):
             f.write(r + "\n")
     print(f"{len(rows)} event items -> {out}")

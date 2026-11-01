@@ -141,7 +141,7 @@ def main(src, out):
         for p in places:
             lines.add(f"{p}|{tier}|{name}")
     with open(out, "w", encoding="utf-8") as f:
-        f.write(f"# White Bag Pup collection book: place|tier|item (from the RealmEye wiki, {data.get('generated', '?')})\n")
+        f.write(f"# White Bag Puppy collection book: place|tier|item (from the RealmEye wiki, {data.get('generated', '?')})\n")
         for line in sorted(lines):
             f.write(line + "\n")
     print(f"{len(lines)} lines, {len({l.split('|')[2] for l in lines})} items -> {out}")

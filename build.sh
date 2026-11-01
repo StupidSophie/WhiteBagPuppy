@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds WhiteBagPup.jar: the Puppy library + its dependencies (compiled from source) + the notifier.
+# Builds WhiteBagPuppy.jar: the Puppy library + its dependencies (compiled from source) + the notifier.
 # Expects sibling checkouts: ../Puppy (or an older ../RealmShark folder), ../dl/{pcap,gson,fb,jna}
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -54,5 +54,5 @@ cp "$DL/fb/LICENSE" "$CLS/META-INF/licenses/flatbuffers-LICENSE" 2>/dev/null || 
 cp "$HERE/licenses/Nunito-OFL.txt" "$CLS/META-INF/licenses/Nunito-OFL.txt"
 
 printf "Main-Class: whitebag.WhiteBagNotifier\n" > "$OUT/manifest.txt"
-jar cfm "$OUT/WhiteBagPup.jar" "$OUT/manifest.txt" -C "$CLS" .
-ls -la "$OUT/WhiteBagPup.jar"
+jar cfm "$OUT/WhiteBagPuppy.jar" "$OUT/manifest.txt" -C "$CLS" .
+ls -la "$OUT/WhiteBagPuppy.jar"

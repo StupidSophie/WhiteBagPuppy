@@ -1,20 +1,20 @@
-# White Bag Pup 🐶
+# White Bag Puppy 🐶
 
 A little desktop companion for **Realm of the Mad God**. It barks in your Discord when a white bag drops, and keeps
 an eye on your DPS, fame, loot, trades and realm events while you play.
 
-<p align="center"><img src="images/app.png" alt="White Bag Pup" width="520"></p>
+<p align="center"><img src="images/app.png" alt="White Bag Puppy" width="520"></p>
 
 It only **reads** the game's network traffic (the same way RealmShark/Tomato does). It never touches the game client,
 never sends anything to the game, and never plays for you.
 
 ## Download
 
-Get **WhiteBagPup.jar** from the [latest release](../../releases/latest).
+Get **WhiteBagPuppy.jar** from the [latest release](../../releases/latest).
 
 From 2.6 on, the pup updates itself: when a new version is out, it downloads it in the background (after backing up
 your files) and installs it when you close the pup, so it opens on the new version next time. Press the pink button
-at the top of Home to restart onto it straight away. The old version is kept as `WhiteBagPup.jar.old`. Untick
+at the top of Home to restart onto it straight away. The old version is kept as `WhiteBagPuppy.jar.old`. Untick
 **Install updates by itself** on Home if you'd rather update by hand.
 Download the new jar and put it in the same folder in place of the old one. Your settings and logs stay.
 See [CHANGELOG.md](CHANGELOG.md) for what changed in each version.
@@ -23,11 +23,11 @@ See [CHANGELOG.md](CHANGELOG.md) for what changed in each version.
 
 1. Install **Java** (https://www.java.com/download) and **Npcap** (https://npcap.com/#download).
    If you already use Tomato or RealmShark, you have both.
-2. Make a folder somewhere plain, like `C:\WhiteBagPup` (not inside a zip, OneDrive, Program Files or a protected
-   Desktop folder), and put `WhiteBagPup.jar` in it. The app saves its settings and logs next to itself.
+2. Make a folder somewhere plain, like `C:\WhiteBagPuppy` (not inside a zip, OneDrive, Program Files or a protected
+   Desktop folder), and put `WhiteBagPuppy.jar` in it. The app saves its settings and logs next to itself.
 3. Make a Discord webhook: in your server, **Server Settings > Integrations > Webhooks > New Webhook**, pick the
    channel, then **Copy Webhook URL**.
-4. Double-click `WhiteBagPup.jar`, open the **Webhooks** tab, paste the URL under **Bag posts** and press
+4. Double-click `WhiteBagPuppy.jar`, open the **Webhooks** tab, paste the URL under **Bag posts** and press
    **Send test post**.
 5. Optional: to get pinged, turn on **Discord Settings > Advanced > Developer Mode**, right-click your name,
    **Copy User ID**, and paste it into **Ping me**.
@@ -35,7 +35,7 @@ See [CHANGELOG.md](CHANGELOG.md) for what changed in each version.
 
 The first time, it reads item names and pictures from your game install. That can take a minute and happens again
 whenever the game updates. If your game is installed somewhere unusual, run
-`java -jar WhiteBagPup.jar --path "C:\path\to\resources.assets"`.
+`java -jar WhiteBagPuppy.jar --path "C:\path\to\resources.assets"`.
 
 ### Friends leaderboard (optional)
 
@@ -158,7 +158,7 @@ To move to a new PC, copy the whole folder. To start fresh, delete the log files
 
 - **Keep your webhook URL private.** It's saved in `whitebag-notifier.properties`, which only lives on your PC.
 - **"Extraction access denied"** means Windows blocked the app from saving the game files. Move the folder somewhere
-  plain like `C:\WhiteBagPup`, or allow Java under **Windows Security > Ransomware protection > Controlled folder access**.
+  plain like `C:\WhiteBagPuppy`, or allow Java under **Windows Security > Ransomware protection > Controlled folder access**.
 - **Don't run other packet sniffers at the same time** if you see sniffer errors.
 - Use it at your own risk. It's an unofficial fan tool and isn't affiliated with DECA.
 
@@ -170,7 +170,7 @@ and the app into one Java 8 jar. It expects these checkouts next to this folder:
 copies.
 
 To publish a new version: bump `VERSION` in `src/main/java/whitebag/UpdateCheck.java` (1.0, 1.1, 1.2...), build,
-then on GitHub **Releases > Draft a new release**, use the same number as the tag, attach `WhiteBagPup.jar`
+then on GitHub **Releases > Draft a new release**, use the same number as the tag, attach `WhiteBagPuppy.jar`
 and publish. Add the new version to the top of `CHANGELOG.md` too.
 
 ## Credits and licences
