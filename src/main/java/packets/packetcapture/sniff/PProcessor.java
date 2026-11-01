@@ -32,7 +32,7 @@ public interface PProcessor {
     void outgoingStream(byte[] data, byte[] srcAddr);
 
     /**
-     * White Bag Pup: data from one game connection (one game client). Defaults to the single-stream methods.
+     * White Bag Puppy: data from one game connection (one game client). Defaults to the single-stream methods.
      *
      * @param connectionId Id of the connection (one per game client connection).
      * @param incoming     True for server-to-client data.
@@ -43,13 +43,13 @@ public interface PProcessor {
         else outgoingStream(data, srcAddr);
     }
 
-    /** White Bag Pup: a TCP reset on one connection. */
+    /** White Bag Puppy: a TCP reset on one connection. */
     default void connectionReset(int connectionId, boolean incoming) {
         if (incoming) resetIncoming();
         else resetOutgoing();
     }
 
-    /** White Bag Pup: a connection closed. */
+    /** White Bag Puppy: a connection closed. */
     default void connectionClosed(int connectionId) {
     }
 }

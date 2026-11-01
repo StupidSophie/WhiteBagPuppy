@@ -95,7 +95,7 @@ final class EventTracker {
         for (String e : events) if (pinged.contains(e)) on.add(e);
         settings.setProperty("ping", String.join(",", on));
         try (FileWriter w = new FileWriter(FILE)) {
-            settings.store(w, "White Bag Pup: realm events to watch, and which ones ping you");
+            settings.store(w, "White Bag Puppy: realm events to watch, and which ones ping you");
         } catch (Exception ignored) {
         }
     }

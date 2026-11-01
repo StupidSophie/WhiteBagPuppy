@@ -185,7 +185,7 @@ final class Leaderboard {
             c.setDoOutput(true);
             c.setRequestMethod("POST");
             c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-            c.setRequestProperty("User-Agent", "WhiteBagPup/" + UpdateCheck.VERSION);
+            c.setRequestProperty("User-Agent", "WhiteBagPuppy/" + UpdateCheck.VERSION);
             byte[] data = body.getBytes(StandardCharsets.UTF_8);
             c.setFixedLengthStreamingMode(data.length);
             try (OutputStream o = c.getOutputStream()) {

@@ -457,7 +457,7 @@ final class RealmStockFeed {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         c.setConnectTimeout(8000);
         c.setReadTimeout(12000);
-        c.setRequestProperty("User-Agent", "WhiteBagPup/1.0 (event tracker)");
+        c.setRequestProperty("User-Agent", "WhiteBagPuppy/1.0 (event tracker)");
         c.setRequestProperty("Accept", "application/json, text/plain, */*");
         int code = c.getResponseCode();
         if (code != 200) throw new Exception("HTTP " + code);

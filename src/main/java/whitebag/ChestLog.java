@@ -106,7 +106,7 @@ final class ChestLog {
         });
         bus.register(PacketType.CLAIM_REWARDS_INFO_PROMPT, p -> {
             ClaimRewardsInfoPromptPacket c = (ClaimRewardsInfoPromptPacket) p;
-            System.out.println("[White Bag Pup] chest prompt: type " + c.chestType + ", " + (c.contents == null ? 0 : c.contents.length) + " things");
+            System.out.println("[White Bag Puppy] chest prompt: type " + c.chestType + ", " + (c.contents == null ? 0 : c.contents.length) + " things");
         });
         bus.register(PacketType.CHEST_REWARD_RESULT, this::onResult);
     }

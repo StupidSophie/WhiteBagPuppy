@@ -40,7 +40,7 @@ final class Backup {
     static synchronized File backupNow(String why) throws IOException {
         if (!DIR.isDirectory() && !DIR.mkdirs()) throw new IOException("couldn't make the backups folder");
         String stamp = new SimpleDateFormat("yyyy-MM-dd-HHmm", Locale.ROOT).format(new Date());
-        File out = new File(DIR, "WhiteBagPup-backup-" + stamp + (why == null || why.isEmpty() ? "" : "-" + why) + ".zip");
+        File out = new File(DIR, "WhiteBagPuppy-backup-" + stamp + (why == null || why.isEmpty() ? "" : "-" + why) + ".zip");
         File tmp = new File(DIR, out.getName() + ".part");
         int n = 0;
         try (ZipOutputStream zip = new ZipOutputStream(new FileOutputStream(tmp))) {
@@ -80,7 +80,7 @@ final class Backup {
 
     /** The backups, newest first. */
     static List<File> all() {
-        File[] f = DIR.listFiles((d, n) -> n.startsWith("WhiteBagPup-backup-") && n.endsWith(".zip"));
+        File[] f = DIR.listFiles((d, n) -> (n.startsWith("WhiteBagPuppy-backup-") || n.startsWith("WhiteBagPup-backup-")) && n.endsWith(".zip"));
         List<File> out = new ArrayList<>(f == null ? new ArrayList<>() : Arrays.asList(f));
         out.sort((a, b) -> Long.compare(b.lastModified(), a.lastModified()));
         return out;

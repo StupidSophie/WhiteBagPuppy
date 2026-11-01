@@ -31,7 +31,7 @@ public class Sniffer {
     private final Sniffer thisObject;
     private final RingBuffer<RawPacket> ringBuffer;
     private final PProcessor processor;
-    /** White Bag Pup: one stream pair per game connection, keyed by the client's local port. */
+    /** White Bag Puppy: one stream pair per game connection, keyed by the client's local port. */
     private final java.util.Map<Integer, Conn> connections = new java.util.HashMap<>();
     private int nextConnectionId = 1;
 

@@ -29,7 +29,7 @@ public class PacketProcessor extends Thread implements PProcessor {
     private final Sniffer sniffer;
     private final PacketLogger logger;
     private final byte[] srcAddr;
-    /** White Bag Pup: incoming/outgoing constructors per game connection. */
+    /** White Bag Puppy: incoming/outgoing constructors per game connection. */
     private final java.util.Map<Integer, PacketConstructor[]> connections = new java.util.HashMap<>();
 
     /**
@@ -101,7 +101,7 @@ public class PacketProcessor extends Thread implements PProcessor {
     }
 
     /**
-     * White Bag Pup: each game connection gets its own stream assembly and RC4 ciphers, so several game
+     * White Bag Puppy: each game connection gets its own stream assembly and RC4 ciphers, so several game
      * clients on one PC don't scramble each other. Packets are tagged with their connection id.
      */
     @Override

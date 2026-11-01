@@ -108,7 +108,7 @@ public class DiscordWebhook {
         sender.submit(() -> post(url, json, files, "test message"));
     }
 
-    private static final String USERNAME = "White Bag Pup";
+    private static final String USERNAME = "White Bag Puppy";
     private static final String PAW = "\uD83D\uDC3E";
     private static final String[] BARKS = {
             "*woof woof!* look what i fetched for you~ \uD83E\uDDB4",
@@ -198,7 +198,7 @@ public class DiscordWebhook {
                 con.setDoOutput(true);
                 con.setFixedLengthStreamingMode(body.length);
                 con.setRequestProperty("Content-Type", contentType);
-                con.setRequestProperty("User-Agent", "WhiteBagPup/" + UpdateCheck.VERSION);
+                con.setRequestProperty("User-Agent", "WhiteBagPuppy/" + UpdateCheck.VERSION);
                 IOException writeError = null;
                 try (OutputStream os = con.getOutputStream()) {
                     os.write(body);

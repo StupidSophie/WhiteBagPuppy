@@ -64,7 +64,7 @@ public class TcpStreamBuilder {
     }
 
     /**
-     * White Bag Pup: start the stream at this sequence number (the byte after a connection's SYN).
+     * White Bag Puppy: start the stream at this sequence number (the byte after a connection's SYN).
      */
     public void startAt(long sequence) {
         packetMap.clear();

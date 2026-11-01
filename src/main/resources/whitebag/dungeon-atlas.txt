@@ -1,4 +1,4 @@
-# White Bag Pup dungeon atlas: D|name|type|difficulty, then P|portal drop|1 if always, U|UT item, S|ST item (Retro items are left out: they no longer drop) (from the RealmEye wiki, 2026-10-09) Holiday event items and items from bosses that wander into many dungeons are left out (they're under Events and seasonal / Many dungeons in the Collection).
+# White Bag Puppy dungeon atlas: D|name|type|difficulty, then P|portal drop|1 if always, U|UT item, S|ST item (Retro items are left out: they no longer drop) (from the RealmEye wiki, 2026-10-09) Holiday event items and items from bosses that wander into many dungeons are left out (they're under Events and seasonal / Many dungeons in the Collection).
 D|Pirate Cave|Realm Dungeons|1
 P|Pirate|0
 P|Piratess|0

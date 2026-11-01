@@ -444,7 +444,7 @@ final class Recap {
         String text = sb.toString().trim();
         if (text.length() > 1990) text = text.substring(0, 1990) + "…";
         StringBuilder j = new StringBuilder("{");
-        j.append("\"username\":\"White Bag Pup\",\"allowed_mentions\":{\"parse\":[]},");
+        j.append("\"username\":\"White Bag Puppy\",\"allowed_mentions\":{\"parse\":[]},");
         j.append("\"content\":").append(DiscordWebhook.str(text));
         j.append("}");
         b.json = j.toString();

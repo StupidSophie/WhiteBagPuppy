@@ -93,7 +93,7 @@ public class PacketConstructor {
     }
 
     /**
-     * White Bag Pup: the connection was seen from its start, so the cipher is in step from byte zero.
+     * White Bag Puppy: the connection was seen from its start, so the cipher is in step from byte zero.
      */
     public void startFresh() {
         firstNonLargePacket = false;

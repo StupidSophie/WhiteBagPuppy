@@ -116,7 +116,7 @@ public class AssetExtractor {
      */
     private static void assetExtractionWindow(String lastModifiedTime)
         throws Throwable {
-        JFrame frame = new JFrame("White Bag Pup Asset Extractor");
+        JFrame frame = new JFrame("White Bag Puppy Asset Extractor");
         frame.setResizable(false);
         frame.setVisible(true);
         Object[] options = { "Extract", "Ignore" };
@@ -279,7 +279,7 @@ public class AssetExtractor {
             JOptionPane.showMessageDialog(
                 pane,
                 "<html>Couldn't save the game files: Windows blocked writing to<br/><b>" + where + "</b><br/><br/>"
-                    + "Move White Bag Pup to a plain folder such as C:\\WhiteBagPup (not inside a zip, OneDrive or Program Files),<br/>"
+                    + "Move White Bag Puppy to a plain folder such as C:\\WhiteBagPuppy (not inside a zip, OneDrive or Program Files),<br/>"
                     + "or allow Java in Windows Security &gt; Ransomware protection &gt; Controlled folder access.<br/>"
                     + "(Blocked: " + throwable.getMessage() + ")</html>"
             );

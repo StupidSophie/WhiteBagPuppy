@@ -15,9 +15,9 @@ import java.util.Locale;
 import java.util.zip.ZipFile;
 
 /**
- * Installs an update by itself: downloads the new WhiteBagPup.jar from the GitHub release, checks it really is the pup,
+ * Installs an update by itself: downloads the new WhiteBagPuppy.jar from the GitHub release, checks it really is the pup,
  * then hands over to a tiny script that waits for this app to close, swaps the jar (keeping the old one as
- * WhiteBagPup.jar.old) and opens the new version.
+ * WhiteBagPuppy.jar.old (or WhiteBagPup.jar.old)) and opens the new version.
  */
 final class Updater {
     private Updater() {
@@ -36,7 +36,7 @@ final class Updater {
         }
     }
 
-    /** Downloads {@code url} next to {@code jar} as jar.download, and checks it's a White Bag Pup jar. */
+    /** Downloads {@code url} next to {@code jar} as jar.download, and checks it's a White Bag Puppy jar. */
     static File download(String url, File jar) throws IOException {
         File out = new File(jar.getParentFile(), jar.getName() + ".download");
         HttpURLConnection c = open(url);
@@ -58,10 +58,10 @@ final class Updater {
             }
         }
         try (ZipFile z = new ZipFile(out)) {
-            if (z.getEntry("whitebag/WhiteBagNotifier.class") == null) throw new IOException("that file isn't White Bag Pup");
+            if (z.getEntry("whitebag/WhiteBagNotifier.class") == null) throw new IOException("that file isn't White Bag Puppy");
         } catch (IOException e) {
             out.delete();
-            throw new IOException("the download isn't a working White Bag Pup (" + e.getMessage() + ")");
+            throw new IOException("the download isn't a working White Bag Puppy (" + e.getMessage() + ")");
         }
         return out;
     }
@@ -71,7 +71,7 @@ final class Updater {
         c.setInstanceFollowRedirects(false);
         c.setConnectTimeout(15000);
         c.setReadTimeout(60000);
-        c.setRequestProperty("User-Agent", "WhiteBagPup");
+        c.setRequestProperty("User-Agent", "WhiteBagPuppy");
         c.setRequestProperty("Accept", "application/octet-stream");
         return c;
     }

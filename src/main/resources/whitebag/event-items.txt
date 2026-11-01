@@ -1,4 +1,4 @@
-# White Bag Pup holiday items: event|usual months|tier|item (from the RealmEye wiki, 2026-10-09)
+# White Bag Puppy holiday items: event|usual months|tier|item (from the RealmEye wiki, 2026-10-09)
 Anniversary|6,7|UT|Venerable Ancient Stone Sword
 Anniversary|6,7|UT|Venerable Coral Silk Armor
 Anniversary|6,7|UT|Venerable Crystal Wand

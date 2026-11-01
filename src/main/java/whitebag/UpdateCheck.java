@@ -11,7 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.function.BiConsumer;
 
 /**
- * Checks GitHub once when the app opens for a newer release of White Bag Pup.
+ * Checks GitHub once when the app opens for a newer release of White Bag Puppy.
  * <p>
  * It only reads the repository's public "latest release" (its tag, like v53, and its page link) and never downloads
  * or runs anything: if there's a newer version, the app says so and offers a button that opens the release page.
@@ -24,10 +24,10 @@ final class UpdateCheck {
      * This build's version (never shown to users). Bump it for every release, and tag the GitHub release
      * the same: 1.0, 1.1, 1.2...
      */
-    static final String VERSION = "2.13.3";
+    static final String VERSION = "2.15.0";
 
     /** The GitHub repository releases come from, as "owner/name". Can be changed in the settings file (update.repo). */
-    static final String DEFAULT_REPO = "StupidSophie/WhiteBagPup";
+    static final String DEFAULT_REPO = "StupidSophie/WhiteBagPuppy";
 
     /** The repo to check: the update.repo setting, else the default. */
     static String repo(String setting) {
@@ -35,7 +35,7 @@ final class UpdateCheck {
         return r.isEmpty() ? DEFAULT_REPO : r;
     }
 
-    /** A newer release: its tag, its page, and the address of its WhiteBagPup.jar (for updating in the app). */
+    /** A newer release: its tag, its page, and the address of its WhiteBagPuppy.jar (for updating in the app). */
     interface Found {
         void found(String tag, String page, String jarUrl);
     }
@@ -50,12 +50,12 @@ final class UpdateCheck {
         if (repo == null || !repo.trim().matches("[\\w.-]+/[\\w.-]+")) return;
         Thread t = new Thread(() -> {
             try {
-                // every recent release, not just the one marked "Latest": the newest version with a WhiteBagPup.jar wins
+                // every recent release, not just the one marked "Latest": the newest version with a WhiteBagPuppy.jar wins
                 HttpURLConnection c = (HttpURLConnection) new URL("https://api.github.com/repos/" + repo.trim() + "/releases?per_page=20").openConnection();
                 c.setConnectTimeout(8000);
                 c.setReadTimeout(10000);
                 c.setRequestProperty("Accept", "application/vnd.github+json");
-                c.setRequestProperty("User-Agent", "WhiteBagPup");
+                c.setRequestProperty("User-Agent", "WhiteBagPuppy");
                 int code = c.getResponseCode();
                 if (code == 404) {
                     upToDate.run();
@@ -66,7 +66,7 @@ final class UpdateCheck {
                     String tag = latestFromRedirect(repo.trim());
                     if (tag == null) throw new Exception("GitHub answered HTTP " + code);
                     if (isNewer(tag, VERSION)) newer.found(tag, "https://github.com/" + repo.trim() + "/releases/tag/" + tag,
-                            "https://github.com/" + repo.trim() + "/releases/download/" + tag + "/WhiteBagPup.jar");
+                            "https://github.com/" + repo.trim() + "/releases/download/" + tag + "/WhiteBagPuppy.jar");
                     else upToDate.run();
                     return;
                 }
@@ -91,7 +91,7 @@ final class UpdateCheck {
                             String n = ao.has("name") ? ao.get("name").getAsString() : "";
                             if (n.toLowerCase(java.util.Locale.ROOT).endsWith(".jar") && ao.has("browser_download_url")) {
                                 jar = ao.get("browser_download_url").getAsString();
-                                if (n.equalsIgnoreCase("WhiteBagPup.jar")) break;
+                                if (n.equalsIgnoreCase("WhiteBagPuppy.jar") || n.equalsIgnoreCase("WhiteBagPup.jar")) break;
                             }
                         }
                     }
@@ -119,7 +119,7 @@ final class UpdateCheck {
             c.setInstanceFollowRedirects(false);
             c.setConnectTimeout(8000);
             c.setReadTimeout(10000);
-            c.setRequestProperty("User-Agent", "WhiteBagPup");
+            c.setRequestProperty("User-Agent", "WhiteBagPuppy");
             String loc = c.getHeaderField("Location");
             int i = loc == null ? -1 : loc.indexOf("/releases/tag/");
             return i < 0 ? null : java.net.URLDecoder.decode(loc.substring(i + "/releases/tag/".length()), "UTF-8");

@@ -313,7 +313,7 @@ public class WhiteBagNotifier {
 
     private void postBadge(String url, Badges.Badge b, String who, boolean test) {
         byte[] medal = BadgesPage.medalPng(b);
-        String json = "{\"username\":\"White Bag Pup\",\"allowed_mentions\":{\"parse\":[]},\"embeds\":[{\"title\":"
+        String json = "{\"username\":\"White Bag Puppy\",\"allowed_mentions\":{\"parse\":[]},\"embeds\":[{\"title\":"
                 + DiscordWebhook.str("\uD83C\uDFC5 Badge unlocked: " + b.name + (test ? " (test)" : ""))
                 + ",\"description\":" + DiscordWebhook.str((test ? "A test post: new badges will look like this.\n" : "") + b.desc
                 + (Wardrobe.unlockedBy(b.id) != null ? "\nUnlocks the pup's " + Wardrobe.unlockedBy(b.id) + "!" : "")
@@ -342,7 +342,7 @@ public class WhiteBagNotifier {
         }
         if (!who.isEmpty()) d.append("*good pup, ").append(who).append("!* \uD83D\uDC3E");
         byte[] medal = BadgesPage.medalPng(best);
-        String json = "{\"username\":\"White Bag Pup\",\"allowed_mentions\":{\"parse\":[]},\"embeds\":[{\"title\":"
+        String json = "{\"username\":\"White Bag Puppy\",\"allowed_mentions\":{\"parse\":[]},\"embeds\":[{\"title\":"
                 + DiscordWebhook.str("\uD83C\uDFC5 " + list.size() + " badges unlocked!")
                 + ",\"description\":" + DiscordWebhook.str(d.toString())
                 + ",\"color\":" + (best.tier.color.getRGB() & 0xFFFFFF)
@@ -589,7 +589,7 @@ public class WhiteBagNotifier {
     private void restoreBackup() {
         JFileChooser pick = new JFileChooser(Backup.DIR.isDirectory() ? Backup.DIR.getAbsoluteFile() : new java.io.File(".").getAbsoluteFile());
         pick.setDialogTitle("Pick a backup to restore");
-        pick.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("White Bag Pup backups (.zip)", "zip"));
+        pick.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("White Bag Puppy backups (.zip)", "zip"));
         if (pick.showOpenDialog(frame) != JFileChooser.APPROVE_OPTION) return;
         java.io.File zip = pick.getSelectedFile();
         int ok = JOptionPane.showConfirmDialog(frame,
@@ -616,7 +616,7 @@ public class WhiteBagNotifier {
             return;
         }
         String title = "\uD83D\uDCD6 " + (who.isEmpty() ? "My" : who + "'s") + " collection";
-        String json = "{\"username\":\"White Bag Pup\",\"allowed_mentions\":{\"parse\":[]},\"embeds\":[{\"title\":"
+        String json = "{\"username\":\"White Bag Puppy\",\"allowed_mentions\":{\"parse\":[]},\"embeds\":[{\"title\":"
                 + DiscordWebhook.str(title) + ",\"color\":" + 0xFF9EBB + ",\"image\":{\"url\":\"attachment://collection.png\"}}]}";
         webhook.sendJson(url, json, java.util.Collections.singletonMap("collection.png", png), "collection");
         log("*proudly trots off* sharing your collection on Discord~");
@@ -704,10 +704,10 @@ public class WhiteBagNotifier {
                 pendingUpdate = got;
                 pendingTag = tag;
                 SwingUtilities.invokeLater(() -> {
-                    log("*wags* White Bag Pup " + tag + " is downloaded! It installs by itself next time you close the pup "
+                    log("*wags* White Bag Puppy " + tag + " is downloaded! It installs by itself next time you close the pup "
                             + "(or press the button at the top of Home to restart onto it now).");
                     if (updateButton != null) {
-                        updateButton.setText("White Bag Pup " + tag + " is ready! Restart to update");
+                        updateButton.setText("White Bag Puppy " + tag + " is ready! Restart to update");
                         updateButton.setEnabled(true);
                         updateButton.setVisible(true);
                         updateButton.revalidate();
@@ -715,9 +715,9 @@ public class WhiteBagNotifier {
                 });
             } catch (Exception ex) {
                 SwingUtilities.invokeLater(() -> {
-                    log("*whimper* couldn't download White Bag Pup " + tag + " by itself: " + ex.getMessage() + ". Press the button at the top of Home to try again.");
+                    log("*whimper* couldn't download White Bag Puppy " + tag + " by itself: " + ex.getMessage() + ". Press the button at the top of Home to try again.");
                     if (updateButton != null) {
-                        updateButton.setText("White Bag Pup " + tag + " is out! Update now");
+                        updateButton.setText("White Bag Puppy " + tag + " is out! Update now");
                         updateButton.setVisible(true);
                         updateButton.revalidate();
                     }
@@ -751,7 +751,7 @@ public class WhiteBagNotifier {
                 saveSettings();
                 handedOver = true;
                 Updater.handOver(jar, pendingUpdate);
-                log("*wags* restarting on White Bag Pup " + pendingTag + "...");
+                log("*wags* restarting on White Bag Puppy " + pendingTag + "...");
                 stopSniffer();
                 new Timer(800, ev -> System.exit(0)).start();
             } catch (Exception ex) {
@@ -761,7 +761,7 @@ public class WhiteBagNotifier {
             return;
         }
         int ok = JOptionPane.showConfirmDialog(frame,
-                "Update to White Bag Pup " + updateTag + "?\n\nThe pup backs up your files, downloads the update from GitHub,\n"
+                "Update to White Bag Puppy " + updateTag + "?\n\nThe pup backs up your files, downloads the update from GitHub,\n"
                         + "then closes and opens again on the new version (your old one is kept as " + jar.getName() + ".old).",
                 "Update", JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
         if (ok != JOptionPane.OK_OPTION) return;
@@ -805,7 +805,7 @@ public class WhiteBagNotifier {
         SwingUtilities.invokeAndWait(this::saveSettings);
     }
 
-    /** Asks GitHub (once) whether there's a newer White Bag Pup, and shows a button if so. */
+    /** Asks GitHub (once) whether there's a newer White Bag Puppy, and shows a button if so. */
     private void checkForUpdate() {
         checkForUpdate(false);
     }
@@ -816,7 +816,7 @@ public class WhiteBagNotifier {
         if (!byHand && Boolean.parseBoolean(settings.getProperty("update.off", "false"))) return;
         UpdateCheck.Found found = (tag, page, jar) -> SwingUtilities.invokeLater(() -> {
             if (tag.equals(pendingTag)) {
-                if (byHand) log("*wags* White Bag Pup " + tag + " is already downloaded: it installs when you close the pup (or press the button at the top of Home).");
+                if (byHand) log("*wags* White Bag Puppy " + tag + " is already downloaded: it installs when you close the pup (or press the button at the top of Home).");
                 return;
             }
             if (tag.equals(updateTag) && !byHand) return; // already told (the check repeats every 6 hours)
@@ -828,10 +828,10 @@ public class WhiteBagNotifier {
                 downloadInBackground(tag, jar);
                 return;
             }
-            log("*ears perk up* White Bag Pup " + tag + " is out! Press the button at the top of Home to "
+            log("*ears perk up* White Bag Puppy " + tag + " is out! Press the button at the top of Home to "
                     + (auto ? "update (the pup backs up your files and restarts by itself)." : "get it."));
             if (updateButton != null) {
-                updateButton.setText(auto ? "White Bag Pup " + tag + " is out! Update now" : "A new version is out! Get the update");
+                updateButton.setText(auto ? "White Bag Puppy " + tag + " is out! Update now" : "A new version is out! Get the update");
                 updateButton.setVisible(true);
                 updateButton.revalidate();
             }
@@ -839,7 +839,7 @@ public class WhiteBagNotifier {
         String fake = System.getProperty("whitebag.fakeUpdate"); // for testing the notice
         if (fake != null) found.found(fake, "https://github.com/", System.getProperty("whitebag.fakeUpdateJar"));
         else UpdateCheck.check(repo, found,
-                () -> { if (byHand) SwingUtilities.invokeLater(() -> log("*wags tail* you're on the newest White Bag Pup (" + UpdateCheck.VERSION + ").")); },
+                () -> { if (byHand) SwingUtilities.invokeLater(() -> log("*wags tail* you're on the newest White Bag Puppy (" + UpdateCheck.VERSION + ").")); },
                 problem -> {
                     System.out.println("Update check: " + problem);
                     // say so in the diary, so a stuck update isn't a mystery
@@ -858,7 +858,7 @@ public class WhiteBagNotifier {
             if (!t.delete()) t.deleteOnExit();
         } catch (Exception e) {
             log("*whimper* Windows won't let me save files in " + here + " (" + e.getMessage() + "). "
-                    + "Item names and pictures need that. Fix: move the app to a plain folder like C:\\WhiteBagPup "
+                    + "Item names and pictures need that. Fix: move the app to a plain folder like C:\\WhiteBagPuppy "
                     + "(not inside a zip file, OneDrive, Program Files or a protected Desktop/Documents folder), "
                     + "or allow Java under Windows Security > Virus & threat protection > Ransomware protection > Controlled folder access.");
         }
@@ -877,7 +877,7 @@ public class WhiteBagNotifier {
         } catch (Throwable e) {
             Badges.ready = true;
             log("*whimper* couldn't read the game files (" + e.getClass().getSimpleName() + "), so posts will show item numbers instead of names and pictures. "
-                    + "If the game is installed somewhere unusual, start with: java -jar WhiteBagPup.jar --path \"<path to resources.assets>\"");
+                    + "If the game is installed somewhere unusual, start with: java -jar WhiteBagPuppy.jar --path \"<path to resources.assets>\"");
         }
     }
 
@@ -898,7 +898,7 @@ public class WhiteBagNotifier {
         TcpStreamErrorHandler.INSTANCE.setErrorMessageHandler((error, dump) -> log("*whimper* sniffer error: " + error));
         TcpStreamErrorHandler.INSTANCE.setErrorStopHandler(() -> SwingUtilities.invokeLater(this::stopSniffer));
 
-        frame = new JFrame("White Bag Pup");
+        frame = new JFrame("White Bag Puppy");
         frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         frame.setIconImages(AppIcon.images(AppIcon.of(settings.getProperty("app.icon"))));
 
@@ -1268,7 +1268,7 @@ public class WhiteBagNotifier {
         } else {
             log("*tilts head* no background.png in " + new File("").getAbsolutePath() + ", so using the plain colour.");
         }
-        log("*wags tail* White Bag Pup " + UpdateCheck.VERSION + " is awake!");
+        log("*wags tail* White Bag Puppy " + UpdateCheck.VERSION + " is awake!");
         log("*wags tail* hi! paste your webhook URL on the Webhooks tab, send a test post, then press Start watching.");
         if (autoStartBox.isSelected()) startSniffer();
     }

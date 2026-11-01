@@ -208,6 +208,18 @@ public class MeTracker {
     volatile java.util.function.BiConsumer<Integer, String> onCharacterStats;
     /** The game's stats string for this character from the last time you loaded in (shots, kills, quests...), and when. */
     volatile String pcStats;
+    /** When your loot drop and loot tier boosts run out (ms), or 0 when you have none. */
+    volatile long lootDropEnds, lootTierEnds;
+
+    /** The game sends the boosts' seconds left now and then: turn them into end times. */
+    private void noteLootTimers(ObjectStatusData s) {
+        if (s.stats == null) return;
+        long now = System.currentTimeMillis();
+        for (StatData d : s.stats) {
+            if (d.statType == StatType.LD_TIMER_STAT) lootDropEnds = d.statValue > 0 ? now + d.statValue * 1000L : 0;
+            else if (d.statType == StatType.LT_TIMER_STAT) lootTierEnds = d.statValue > 0 ? now + d.statValue * 1000L : 0;
+        }
+    }
     volatile long pcStatsAt;
 
     private void onCreateSuccess(Packet packet) {
@@ -435,6 +447,7 @@ public class MeTracker {
                         if (me == null) me = new Thing();
                         me.objectType = o.objectType;
                         apply(me, o.status);
+                        noteLootTimers(o.status);
                         noteFame();
                         changed = true;
                     } else if (isPetClass(o.objectType) || mightBePet(o.status)) {
@@ -462,6 +475,7 @@ public class MeTracker {
                 if (s == null || s.stats == null || s.stats.length == 0) continue;
                 if (s.objectId == myId && me != null) {
                     changed |= apply(me, s);
+                    noteLootTimers(s);
                     noteFame();
                 } else {
                     Thing t = others.get(s.objectId);
@@ -588,7 +602,7 @@ public class MeTracker {
         if (now - lastDump < 15000) return;
         lastDump = now;
         StringBuilder sb = new StringBuilder();
-        sb.append("White Bag Pup pet check, ").append(new java.util.Date(now)).append('\n');
+        sb.append("White Bag Puppy pet check, ").append(new java.util.Date(now)).append('\n');
         sb.append("active pet id from game: ").append(activePetInstance).append('\n');
         sb.append("my position: ").append(me.x).append(", ").append(me.y).append('\n');
         Thing chosen = pet();

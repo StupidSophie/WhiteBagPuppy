@@ -1,4 +1,4 @@
-# White Bag Pup collection book: place|tier|item (from the RealmEye wiki, 2026-10-09)
+# White Bag Puppy collection book: place|tier|item (from the RealmEye wiki, 2026-10-09)
 Abandoned City|ST|Kiritsukeru
 Abandoned City|ST|Quintessential Quiver
 Abandoned City|ST|Reinforced Root Armor

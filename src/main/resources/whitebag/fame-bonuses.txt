@@ -1,4 +1,4 @@
-# White Bag Pup fame bonuses (from the RealmEye wiki's Fame Bonuses page, 2026-10-29): C|bonus|set|percent|fame|dungeons, T|dungeon|times|fame
+# White Bag Puppy fame bonuses (from the RealmEye wiki's Fame Bonuses page, 2026-10-29): C|bonus|set|percent|fame|dungeons, T|dungeon|times|fame
 C|Tunnel Rat|Wild Shadow era dungeons|7.5|3000|Pirate Cave;Forbidden Jungle;Spider Den;Snake Pit;Undead Lair;Abyss of Demons;Manor of the Immortals;Ocean Trench;Tomb of the Ancients;Oryx's Castle;Oryx's Chamber;Wine Cellar
 C|Explosive Journey|Kabam era dungeons|7.5|3000|Davy Jones' Locker;Mad Lab;Candyland Hunting Grounds;Haunted Cemetery;Cave of a Thousand Treasures;Lair of Draconis;Deadwater Docks;Woodland Labyrinth;The Crawling Depths;The Shatters;Lair of Shaitan;Puppet Master's Theatre;Ice Citadel
 C|Travel of the Decade|Deca era dungeons|10|5000|Puppet Master's Encore;The Hive;Toxic Sewers;Mountain Temple;The Third Dimension;The Nest;Lost Halls;Cultist Hideout;The Void;Cnidarian Reef;Parasite Chambers;Magic Woods;Secluded Thicket;Cursed Library;Oryx's Sanctuary;Ancient Ruins;High Tech Terror;Sulfurous Wetlands;Spectral Penitentiary

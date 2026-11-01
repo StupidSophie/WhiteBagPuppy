@@ -4,7 +4,7 @@ import packets.Packet;
 import packets.packetcapture.register.Register;
 
 /**
- * White Bag Pup: each game client has its own connection. Every decoded packet is handed here with the id
+ * White Bag Puppy: each game client has its own connection. Every decoded packet is handed here with the id
  * of the connection it came from, so an app can tell several game clients (accounts) apart. By default it
  * just emits the packet as before.
  */

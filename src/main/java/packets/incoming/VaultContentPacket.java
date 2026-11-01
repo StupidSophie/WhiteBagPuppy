@@ -87,7 +87,7 @@ public class VaultContentPacket extends Packet {
     public short materialUpgradeCost;
 
     /**
-     * Forgiving version (White Bag Pup): reads the containers first and stops quietly if the game has
+     * Forgiving version (White Bag Puppy): reads the containers first and stops quietly if the game has
      * changed the rest of the message, instead of throwing the whole vault away.
      */
     @Override
@@ -129,7 +129,7 @@ public class VaultContentPacket extends Packet {
             }
         }
         int left = buffer.getRemainingBytes();
-        System.out.println("[White Bag Pup] vault message: vault " + vaultContents.length + ", potions " + potionContents.length
+        System.out.println("[White Bag Puppy] vault message: vault " + vaultContents.length + ", potions " + potionContents.length
                 + ", gifts " + giftContents.length + ", spoils " + seasonalSpoilContent.length + ", last piece " + lastVaultPacket
                 + (stopped != null ? ", stopped reading at the " + stopped + " (" + buffer.getIndex() + "/" + buffer.size() + " bytes)"
                 : left > 0 ? ", " + left + " extra bytes ignored" : ""));

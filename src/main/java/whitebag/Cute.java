@@ -463,12 +463,12 @@ final class Cute {
             }
 
             int tx = PUP_W + 18;
-            Pixel.text(g, "white bag pup", tx, getHeight() - 88, 4, Pixel.INK);
+            Pixel.text(g, "white bag puppy", tx, getHeight() - 88, 4, Pixel.INK);
             smooth(g);
             // the version, small, after the name
             g.setFont(font(Font.BOLD, 12));
             g.setColor(Theme.c(0x8A7F99));
-            g.drawString("v" + UpdateCheck.VERSION, tx + Pixel.textWidth("white bag pup", 4) + 10, getHeight() - 88 + Pixel.capHeight(4));
+            g.drawString("v" + UpdateCheck.VERSION, tx + Pixel.textWidth("white bag puppy", 4) + 10, getHeight() - 88 + Pixel.capHeight(4));
             g.setColor(Theme.BLACK); // black so it stands out over the background picture
             g.setFont(font(Font.PLAIN, 14));
             g.drawString(watching ? (isSad() ? "Still looking for a white bag..." : "Watching for white bags.")

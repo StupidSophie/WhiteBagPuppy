@@ -47,7 +47,7 @@ public class UnityExtractor {
                 String s = e.getMessage();
                 if (s.equals("The system cannot find the path specified")) {
                     JOptionPane.showMessageDialog(null, "<html>Couldn't save the game files: Windows blocked creating<br/><b>" + f.getAbsolutePath() + "</b><br/><br/>"
-                            + "Move White Bag Pup to a plain folder such as C:\\WhiteBagPup (not inside a zip, OneDrive or Program Files),<br/>"
+                            + "Move White Bag Puppy to a plain folder such as C:\\WhiteBagPuppy (not inside a zip, OneDrive or Program Files),<br/>"
                             + "or allow Java in Windows Security &gt; Ransomware protection &gt; Controlled folder access.</html>");
                     System.exit(0);
                 }

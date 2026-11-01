@@ -22,7 +22,7 @@ public class TickAligner {
     private RC4 rc4Fork;
     private byte[] TickA;
     private int CURRENT_TICK;
-    /** White Bag Pup: decrypting from the connection's start; take the first tick seen as the baseline. */
+    /** White Bag Puppy: decrypting from the connection's start; take the first tick seen as the baseline. */
     private boolean freshStart;
 
     /**
@@ -108,7 +108,7 @@ public class TickAligner {
     }
 
     /**
-     * White Bag Pup: the cipher is at the very start of a new connection, so it's already in step.
+     * White Bag Puppy: the cipher is at the very start of a new connection, so it's already in step.
      * Decrypt from the first packet (so the login and map packets aren't lost) instead of waiting for
      * two tick packets to find the position.
      */
