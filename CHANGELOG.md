@@ -3,6 +3,13 @@
 What's new in each version of White Bag Puppy, newest first.
 Download the latest from [Releases](../../releases/latest).
 
+## 2.30.49
+
+- **White bags add up across computers.** The friends leaderboard (and femcore.gay) now counts your white bags from
+  every PC you play on: each pup tells the bot which bags it has seen (when each dropped and its first item, nothing
+  else), and the bot keeps them all, counting each bag once. A fresh install or a restored backup no longer resets
+  your count.
+
 ## 2.30.48
 - Who's online: with a Biscuit link, the pup tells Biscuit about once a minute that you're playing (name, class, where you are and your party), and which guildmates it can see near you. Type /online in Discord to see who's on, and /online player:name for when someone was last seen. Ticked from the start; untick "Tell my guild's Biscuit when I'm online" in Settings > Guild deaths to stop. (The game's guild list comes from Deca's website, which the pup can't read, so people only show up when they or a guildmate near them has the pup.)
 

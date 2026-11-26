@@ -81,11 +81,15 @@ final class Leaderboard {
         long allWhites = 0, allRuns = 0;
         Day life = new Day(); // everything ever, for the lifetime leaderboard
         List<LootStats.Entry> bags = new ArrayList<>();
+        // each white bag's fingerprint (when it dropped + its first item), so the bot can add up bags from every
+        // computer you play on without counting one twice
+        java.util.Set<String> whiteKeys = new java.util.TreeSet<>();
         for (LootStats.Entry e : LootStats.all()) {
             if (!mine.test(e.account)) continue;
             bags.add(e);
             boolean white = LootStats.colour(e.type) == BagType.WHITE;
             if (white) allWhites++;
+            if (white && whiteKeys.size() < 20000) whiteKeys.add(e.at + "-" + (e.items.isEmpty() ? 0 : e.items.get(0)));
             life.bags++;
             if (white) life.whites++;
             life.colours.merge(LootStats.colour(e.type), 1L, Long::sum);
@@ -140,6 +144,14 @@ final class Leaderboard {
         StringBuilder a = new StringBuilder();
         numbers(a, all);
         String lifeJson = a.substring(a.indexOf(":{") + 2, a.length() - 2); // the numbers inside {"all":{...}}
+        j.append(",\"whiteBags\":[");
+        boolean firstKey = true;
+        for (String k : whiteKeys) {
+            if (!firstKey) j.append(',');
+            firstKey = false;
+            j.append('"').append(k).append('"');
+        }
+        j.append(']');
         j.append(",\"all\":{").append(lifeJson)
                 .append(",\"badges\":").append(badges).append(",\"collection\":").append(collection).append("}}");
         return j.toString();
