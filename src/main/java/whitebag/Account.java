@@ -109,6 +109,11 @@ final class Account {
     /** What's killed this account's characters (lower-case name -> times), and who's been warned about on this map. */
     private volatile java.util.Map<String, Integer> killers, nearly;
     final CloseCalls closeCalls;
+    /** The game server's address (set by AccountRouter), and the server name once the pup has worked it out. */
+    volatile String serverIp = "";
+    volatile String server = "";
+    private String lastMapIp = "";
+    private long lastMapAt;
 
     /** The last few hits you took (for a death). */
     private String lastHits() {
@@ -255,6 +260,13 @@ final class Account {
                 wormholeKinds.clear();
             }
             AttiFeed.myRealm = null;
+            String ip = serverIp;
+            boolean recent = now - lastMapAt < 10 * 60_000L;
+            String was = server;
+            server = ServerNames.arrived(ip, lastMapIp, was, recent, "Nexus".equalsIgnoreCase(m.name), m.realmName);
+            lastMapIp = ip;
+            lastMapAt = now;
+            if (!server.isEmpty() && !server.equals(was)) host.log(prefix() + "*sniffs the air* you're on " + server + ".");
             synchronized (this) {
                 if (visitMap != null) RunLog.add(visitMap, key, visitStart, now);
                 visitMap = BagTracker.cleanName(m.name, m.displayName);

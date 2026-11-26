@@ -38,6 +38,8 @@ final class AccountRouter implements ConnectionRouter.Handler, ConnectionRouter.
         int misses, packets;
         String name;
         boolean warned, usedFallback;
+        /** The game server's address. */
+        String ip = "";
     }
 
     private final List<Account> accounts;
@@ -70,6 +72,8 @@ final class AccountRouter implements ConnectionRouter.Handler, ConnectionRouter.
     @Override
     public synchronized void packet(int connectionId, Packet p) {
         Conn c = conns.computeIfAbsent(connectionId, k -> new Conn());
+        String connIp = ConnectionRouter.ipOf(connectionId);
+        if (!connIp.isEmpty()) c.ip = connIp;
 
         if (p instanceof HelloPacket) {
             c.token = ((HelloPacket) p).accessToken;
@@ -108,6 +112,7 @@ final class AccountRouter implements ConnectionRouter.Handler, ConnectionRouter.
         }
         if (c.account != null) {
             if (c.key != null) c.account.playing = c.key;
+            if (!c.ip.isEmpty()) c.account.serverIp = c.ip;
             c.account.bus.emit(p);
         } else {
             c.held.add(p);
@@ -224,6 +229,7 @@ final class AccountRouter implements ConnectionRouter.Handler, ConnectionRouter.
         c.confirmed = c.confirmed || confirmed;
         if (c.account == a) return;
         c.account = a;
+        if (!c.ip.isEmpty()) a.serverIp = c.ip;
         while (!c.held.isEmpty()) a.bus.emit(c.held.poll()); // replay what arrived before we knew the account
     }
 }

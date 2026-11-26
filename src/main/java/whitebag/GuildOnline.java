@@ -11,7 +11,7 @@ import java.nio.charset.StandardCharsets;
 
 /**
  * Who's on, for Biscuit's /online: about once a minute while you're playing, the pup tells the guild's Biscuit your
- * name, class, where you are and your party, plus the guildmates it can see near you (so people without the pup show
+ * name, class, server, where you are and your party, plus the guildmates it can see near you (so people without the pup show
  * up too). When you stop playing it says so once. Only with a Biscuit link, and only when ticked in Settings.
  */
 final class GuildOnline {
@@ -37,6 +37,8 @@ final class GuildOnline {
         String map = a.visitMap();
         String where = map == null ? "" : RunLog.label(map);
         if (!where.isEmpty()) me.addProperty("map", where);
+        String server = a.server;
+        if (!server.isEmpty()) me.addProperty("server", server);
         if (a.players.partySize() > 0) {
             me.addProperty("party", a.players.partySize());
             me.addProperty("pmax", a.players.partyMax());
@@ -55,6 +57,7 @@ final class GuildOnline {
                 int c = p.thing.objectType;
                 if (c > 0) s.addProperty("cls", AboutMe.objectName(c, ""));
                 if (!where.isEmpty()) s.addProperty("map", where);
+                if (!server.isEmpty()) s.addProperty("server", server);
                 seen.add(s);
                 if (seen.size() >= 40) break;
             }

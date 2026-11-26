@@ -32,6 +32,21 @@ public final class ConnectionRouter {
         closedHandler = c;
     }
 
+    private static final java.util.Map<Integer, String> IPS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** The game server's address for this connection, e.g. "52.23.232.42". */
+    static void setIp(int connectionId, byte[] a) {
+        if (a == null || a.length < 4) return;
+        String ip = (a[0] & 255) + "." + (a[1] & 255) + "." + (a[2] & 255) + "." + (a[3] & 255);
+        if (!ip.equals(IPS.get(connectionId))) IPS.put(connectionId, ip);
+    }
+
+    /** The game server's address for a connection, or "" if not known. */
+    public static String ipOf(int connectionId) {
+        String ip = IPS.get(connectionId);
+        return ip == null ? "" : ip;
+    }
+
     static void setCurrent(int connectionId) {
         CURRENT.set(connectionId);
     }
@@ -48,6 +63,7 @@ public final class ConnectionRouter {
 
     static void closed(int connectionId) {
         Closed c = closedHandler;
+        IPS.remove(connectionId);
         if (c != null) c.closed(connectionId);
     }
 }

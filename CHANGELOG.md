@@ -3,6 +3,9 @@
 What's new in each version of White Bag Puppy, newest first.
 Download the latest from [Releases](../../releases/latest).
 
+## 2.30.49
+- Which server you're on: the pup works it out from the realm names on atti.network (after a realm or two on a new server) and remembers it in server-ips.txt, then says it in the diary. It goes to Biscuit with who's online, for guildmates near you too, so /online and /offline show the server.
+
 ## 2.30.48
 - Who's online: with a Biscuit link, the pup tells Biscuit about once a minute that you're playing (name, class, where you are and your party), and which guildmates it can see near you. Type /online in Discord to see who's on, and /online player:name for when someone was last seen. Ticked from the start; untick "Tell my guild's Biscuit when I'm online" in Settings > Guild deaths to stop. (The game's guild list comes from Deca's website, which the pup can't read, so people only show up when they or a guildmate near them has the pup.)
 
