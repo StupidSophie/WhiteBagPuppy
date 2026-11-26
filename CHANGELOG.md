@@ -3,7 +3,7 @@
 What's new in each version of White Bag Puppy, newest first.
 Download the latest from [Releases](../../releases/latest).
 
-## 2.30.49
+## 2.30.51
 
 - **White bags add up across computers.** The friends leaderboard (and femcore.gay) now counts your white bags from
   every PC you play on: each pup tells the bot which bags it has seen (when each dropped and its first item, nothing
