@@ -210,6 +210,8 @@ final class Account {
                 d.enemy = dps.enemyNear(d.x, d.y);
                 d.charClass = me.myClassType();
                 d.charId = me.charId();
+                MeTracker.Thing looter = me.character();
+                d.seasonal = looter == null ? -1 : Owned.seasonal(looter) ? 1 : 0;
             } catch (Throwable ignored) {
             }
             LootStats.add(d, key);

@@ -82,7 +82,8 @@ final class Leaderboard {
         Day life = new Day(); // everything ever, for the lifetime leaderboard
         List<LootStats.Entry> bags = new ArrayList<>();
         // each white bag's fingerprint (when it dropped + its first item), so the bot can add up bags from every
-        // computer you play on without counting one twice
+        // computer you play on without counting one twice. A bag looted by a seasonal character ends in "s"
+        // ("1764100000-2345s"); the bot counts it as the same bag either way.
         java.util.Set<String> whiteKeys = new java.util.TreeSet<>();
         // for the website's white bag page: which item made each bag white (and its rarity), newest 5000 bags
         java.util.LinkedHashMap<String, String> whiteItems = new java.util.LinkedHashMap<String, String>() {
@@ -98,7 +99,7 @@ final class Leaderboard {
             if (white) allWhites++;
             if (white && whiteKeys.size() < 20000) {
                 String key = e.at + "-" + (e.items.isEmpty() ? 0 : e.items.get(0));
-                whiteKeys.add(key);
+                whiteKeys.add(LootStats.seasonal(e) ? key + "s" : key);
                 String item = whiteItem(e);
                 if (item != null) whiteItems.put(key, item);
             }
