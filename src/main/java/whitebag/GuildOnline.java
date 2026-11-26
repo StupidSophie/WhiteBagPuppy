@@ -10,7 +10,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
 /**
- * Who's on, for Biscuit's /online: about once a minute while you're playing, the pup tells the guild's Biscuit your
+ * Who's on, for Biscuit's /whoson: about once a minute while you're playing, the pup tells the guild's Biscuit your
  * name, class, where you are and your party, plus the guildmates it can see near you (so people without the pup show
  * up too). When you stop playing it says so once. Only with a Biscuit link, and only when ticked in Settings.
  */

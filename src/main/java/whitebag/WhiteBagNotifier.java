@@ -663,7 +663,7 @@ public class WhiteBagNotifier {
             saveSettings();
         });
         section(hooks, mine, 8);
-        Pixel.Check online = new Pixel.Check("Tell my guild's Biscuit when I'm online (for /online)",
+        Pixel.Check online = new Pixel.Check("Tell my guild's Biscuit when I'm online (for /whoson)",
                 Boolean.parseBoolean(settings.getProperty("online.on", "true")));
         online.addActionListener(e -> {
             settings.setProperty("online.on", String.valueOf(online.isSelected()));
