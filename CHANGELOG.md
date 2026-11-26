@@ -3,6 +3,12 @@
 What's new in each version of White Bag Puppy, newest first.
 Download the latest from [Releases](../../releases/latest).
 
+## 2.30.57
+
+- **Missing item pictures on femcore.gay.** The website draws items from RealmShark's sprite sheet, which lacks some
+  items (or has an empty spot for them). With a Biscuit link, the pup now asks the bot which pictures it's missing
+  (just item numbers) every half hour and sends the game's own picture for each, so they fill in by themselves.
+
 ## 2.30.56
 
 - **Posts held for Biscuit go to femcore.gay.** Bags, badges and deaths the pup was holding while Biscuit was down
