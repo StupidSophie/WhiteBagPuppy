@@ -3,6 +3,12 @@
 What's new in each version of White Bag Puppy, newest first.
 Download the latest from [Releases](../../releases/latest).
 
+## 2.30.55
+
+- **Shiny white bags on femcore.gay/whites.** A shiny UT or ST now counts as the item that made a bag white (the game
+  labels shinies differently, so they were missed), for your older bags too. Biscuit shows them with a Shiny tag and
+  their shiny picture.
+
 ## 2.30.54
 
 - **Seasonal white bags on femcore.gay/whites.** When a bag drops, the pup now notes whether the character that looted

@@ -241,20 +241,47 @@ final class Leaderboard {
      * bags can also hold potions, so the first item isn't always the one that matters.
      */
     static String whiteItem(LootStats.Entry e) {
+        String[] tiers = new String[e.items.size()];
+        for (int i = 0; i < tiers.length; i++) tiers[i] = whiteTier(e.items.get(i));
         for (String want : new String[]{"UT", "ST"}) {
-            for (int i = 0; i < e.items.size(); i++) {
-                ItemInfo info;
-                try {
-                    info = ItemInfo.of(e.items.get(i));
-                } catch (Throwable t) {
-                    continue;
-                }
-                if (info != null && want.equals(info.rarity)) {
+            for (int i = 0; i < tiers.length; i++) {
+                if (want.equals(tiers[i])) {
                     int enchant = i < e.rarity.size() ? Math.max(0, Math.min(4, e.rarity.get(i))) : 0;
                     return e.items.get(i) + ":" + enchant + ":" + want;
                 }
             }
         }
         return null;
+    }
+
+    /**
+     * "UT" or "ST" when the item can make a bag white, else null. Shiny items (and some others) are only labelled
+     * TAB_UT / TAB_ST in the game files, so those labels count too; potions and other things you use up never do.
+     */
+    static String whiteTier(int id) {
+        ItemInfo info;
+        try {
+            info = ItemInfo.of(id);
+        } catch (Throwable t) {
+            return null;
+        }
+        if (info == null) return null;
+        if ("UT".equals(info.rarity) || "ST".equals(info.rarity)) return info.rarity;
+        if ("Potion".equals(info.rarity) || "Consumable".equals(info.rarity)) return null;
+        String labels;
+        try {
+            labels = assets.IdToAsset.getIdLabel(id);
+        } catch (Throwable t) {
+            return null;
+        }
+        if (labels == null) return null;
+        boolean ut = false, st = false;
+        for (String raw : labels.toUpperCase(java.util.Locale.ROOT).split("[,;\\s]+")) {
+            String l = raw.trim();
+            if (l.equals("CONSUMABLE") || l.equals("SIGIL")) return null;
+            if (l.equals("UT") || l.equals("TAB_UT")) ut = true;
+            if (l.equals("ST") || l.equals("TAB_ST")) st = true;
+        }
+        return st && !ut ? "ST" : ut ? "UT" : null;
     }
 }
