@@ -2618,20 +2618,25 @@ public class WhiteBagNotifier {
         moveBiscuitLinks();
     }
 
-    /** Biscuit's old addresses and where it lives now. Its links keep their code, so only the address changes. */
-    private static final String[][] BISCUIT_MOVED = {
-            {"femcore-production.up.railway.app", "femcore.gay"},
-    };
+    /**
+     * Biscuit's old homes: any Railway address (it had more than one) when the link goes to Biscuit's own paths
+     * (/pup/... or /recap), which no Discord webhook or other site uses. Its links keep their code, so only the address changes.
+     */
+    static final java.util.regex.Pattern BISCUIT_OLD_HOST =
+            java.util.regex.Pattern.compile("(?i)https?://[a-z0-9-]+\\.up\\.railway\\.app(?=/(?:pup/|recap(?:[/?#]|$)))");
+    static final String BISCUIT_HOME = "https://femcore.gay";
+
+    /** One saved value with any old Biscuit address swapped for the new one. */
+    static String movedBiscuitLink(String value) {
+        return value == null ? null : BISCUIT_OLD_HOST.matcher(value).replaceAll(BISCUIT_HOME);
+    }
 
     /** Biscuit moved: point every saved link (bags, badges, deaths, recaps, contest) at the new address, once. */
     private void moveBiscuitLinks() {
         int moved = 0;
         for (String key : settings.stringPropertyNames()) {
             String value = settings.getProperty(key, "");
-            String updated = value;
-            for (String[] m : BISCUIT_MOVED) {
-                updated = updated.replaceAll("(?i)(https?://)" + java.util.regex.Pattern.quote(m[0]) + "(?=[/?#]|$)", "https://" + m[1]);
-            }
+            String updated = movedBiscuitLink(value);
             if (!updated.equals(value)) {
                 settings.setProperty(key, updated);
                 moved++;
