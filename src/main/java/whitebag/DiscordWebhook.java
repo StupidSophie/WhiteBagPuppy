@@ -313,9 +313,9 @@ public class DiscordWebhook {
             case 500: return "The bot isn't set up right yet (see its message in brackets).";
             case 422: return "The bot got it, but Discord refused its post: check the bot can send messages and attach files in that channel.";
             case 502: case 503: case 504:
-                return "The bot isn't answering: check it's running on Railway, has RECAP_KEY set, and that its domain's port matches (8080).";
+                return "The bot isn't answering: check it's running (fly logs), has RECAP_KEY set, and that it listens on port 8080.";
             case -1:
-                return "The connection was cut off. Usually the bot isn't answering on that address: check RECAP_KEY is set on Railway, the bot redeployed, and the domain's port is 8080.";
+                return "The connection was cut off. Usually the bot isn't answering on that address: check the link's address, that RECAP_KEY is set, and that the bot is running.";
             default: return "";
         }
     }
