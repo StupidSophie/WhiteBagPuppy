@@ -4,7 +4,7 @@ What's new in each version of White Bag Puppy, newest first.
 Download the latest from [Releases](../../releases/latest).
 
 ## 2.30.48
-- Who's online: with a Biscuit link, the pup tells Biscuit about once a minute that you're playing (name, class, where you are and your party), and which guildmates it can see near you. Type /whoson in Discord to see who's on, and /lastseen for when someone was last on. Ticked from the start; untick "Tell my guild's Biscuit when I'm online" in Settings > Guild deaths to stop. (The game's guild list comes from Deca's website, which the pup can't read, so people only show up when they or a guildmate near them has the pup.)
+- Who's online: with a Biscuit link, the pup tells Biscuit about once a minute that you're playing (name, class, where you are and your party), and which guildmates it can see near you. Type /online in Discord to see who's on, and /online player:name for when someone was last seen. Ticked from the start; untick "Tell my guild's Biscuit when I'm online" in Settings > Guild deaths to stop. (The game's guild list comes from Deca's website, which the pup can't read, so people only show up when they or a guildmate near them has the pup.)
 
 ## 2.30.47
 - "Join the friends leaderboard" is now ticked from the start. It only sends anything once there's a bot recap link; untick it to stay off the board.
