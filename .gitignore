@@ -40,3 +40,5 @@ loot-puppy-contest.txt
 # what White Bag Puppy.exe installs next to the app
 runtime/
 installed.txt
+# which game server address is which server (the pup learns it)
+server-ips.txt

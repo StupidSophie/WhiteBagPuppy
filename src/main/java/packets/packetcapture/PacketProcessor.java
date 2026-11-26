@@ -121,6 +121,7 @@ public class PacketProcessor extends Thread implements PProcessor {
         if (incoming) {
             logger.addIncoming(data.length);
             ipEmitter(srcAddr);
+            ConnectionRouter.setIp(connectionId, srcAddr);
             pc[0].build(data);
         } else {
             logger.addOutgoing(data.length);

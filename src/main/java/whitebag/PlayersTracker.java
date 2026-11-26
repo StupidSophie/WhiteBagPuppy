@@ -156,6 +156,37 @@ final class PlayersTracker {
         });
     }
 
+    /** Someone in a guild who came into view since the last online update (idea from the online-now branch). */
+    static final class Passer {
+        final String name, guild, map;
+        final int cls;
+
+        Passer(String name, String guild, int cls, String map) {
+            this.name = name;
+            this.guild = guild;
+            this.cls = cls;
+            this.map = map;
+        }
+    }
+
+    /** Lower-case name -> who walked past in view since takePassed() was last called (at most 200). */
+    private final Map<String, Passer> passed = new java.util.LinkedHashMap<>();
+
+    private void notePassed(MeTracker.Thing t) {
+        String g = t.s(StatType.GUILD_NAME_STAT).trim(), n = DpsTracker.cleanName(t.s(StatType.NAME_STAT));
+        if (g.isEmpty() || n.isEmpty()) return;
+        String k = n.toLowerCase(Locale.ROOT);
+        if (passed.size() >= 200 && !passed.containsKey(k)) return;
+        passed.put(k, new Passer(n, g, t.objectType, mapName));
+    }
+
+    /** Everyone in a guild who was in view since this was last asked (then forgotten), so people who only walked past count too. */
+    synchronized List<Passer> takePassed() {
+        List<Passer> out = new ArrayList<>(passed.values());
+        passed.clear();
+        return out;
+    }
+
     String mapName() {
         return mapName;
     }
@@ -252,6 +283,7 @@ final class PlayersTracker {
                     MeTracker.apply(t, o.status);
                     players.put(o.status.objectId, t);
                     seen.put(o.status.objectId, System.currentTimeMillis());
+                    notePassed(t);
                     // back straight away: they only teleported or walked back into view
                     String n = DpsTracker.cleanName(t.s(StatType.NAME_STAT));
                     if (!n.isEmpty()) pending.removeIf(d -> d.name.equalsIgnoreCase(n));
@@ -348,7 +380,10 @@ final class PlayersTracker {
             for (ObjectStatusData s : p.status) {
                 if (s == null || s.stats == null || s.stats.length == 0) continue;
                 MeTracker.Thing t = players.get(s.objectId);
-                if (t != null && MeTracker.apply(t, s)) changed = true;
+                if (t != null && MeTracker.apply(t, s)) {
+                    changed = true;
+                    notePassed(t); // the name or guild may only arrive now
+                }
             }
         }
         if (changed) fire();

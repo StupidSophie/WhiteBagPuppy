@@ -8,10 +8,11 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 /**
  * Who's on, for Biscuit's /online: about once a minute while you're playing, the pup tells the guild's Biscuit your
- * name, class, where you are and your party, plus the guildmates it can see near you (so people without the pup show
+ * name, class, server, where you are and your party, plus the guildmates it can see near you (so people without the pup show
  * up too). When you stop playing it says so once. Only with a Biscuit link, and only when ticked in Settings.
  */
 final class GuildOnline {
@@ -37,30 +38,44 @@ final class GuildOnline {
         String map = a.visitMap();
         String where = map == null ? "" : RunLog.label(map);
         if (!where.isEmpty()) me.addProperty("map", where);
+        String server = a.server;
+        if (!server.isEmpty()) me.addProperty("server", server);
         if (a.players.partySize() > 0) {
             me.addProperty("party", a.players.partySize());
             me.addProperty("pmax", a.players.partyMax());
         }
         JsonObject o = new JsonObject();
         o.add("me", me);
-        // guildmates in view (same guild as you)
+        // guildmates in view now, and those who walked past since the last update (same guild as you)
         String guild = a.me.myGuild();
         JsonArray seen = new JsonArray();
+        java.util.Set<String> done = new java.util.HashSet<>();
+        done.add(name.toLowerCase(java.util.Locale.ROOT));
+        List<PlayersTracker.Passer> passed = a.players.takePassed();
         if (!guild.isEmpty()) {
             for (PlayersTracker.Player p : a.players.players()) {
                 String n = p.name();
-                if (n.isEmpty() || n.equalsIgnoreCase(name) || !guild.equals(p.thing.s(StatType.GUILD_NAME_STAT).trim())) continue;
-                JsonObject s = new JsonObject();
-                s.addProperty("name", n);
-                int c = p.thing.objectType;
-                if (c > 0) s.addProperty("cls", AboutMe.objectName(c, ""));
-                if (!where.isEmpty()) s.addProperty("map", where);
-                seen.add(s);
+                if (n.isEmpty() || !guild.equals(p.thing.s(StatType.GUILD_NAME_STAT).trim())) continue;
+                if (done.add(n.toLowerCase(java.util.Locale.ROOT))) seen.add(seenOne(n, p.thing.objectType, where, server));
                 if (seen.size() >= 40) break;
+            }
+            for (int i = passed.size() - 1; i >= 0 && seen.size() < 40; i--) { // newest first
+                PlayersTracker.Passer p = passed.get(i);
+                if (!guild.equals(p.guild) || !done.add(p.name.toLowerCase(java.util.Locale.ROOT))) continue;
+                seen.add(seenOne(p.name, p.cls, p.map.isEmpty() ? where : RunLog.label(p.map), server));
             }
         }
         if (seen.size() > 0) o.add("seen", seen);
         return o.toString();
+    }
+
+    private static JsonObject seenOne(String name, int cls, String where, String server) {
+        JsonObject s = new JsonObject();
+        s.addProperty("name", name);
+        if (cls > 0) s.addProperty("cls", AboutMe.objectName(cls, ""));
+        if (where != null && !where.isEmpty()) s.addProperty("map", where);
+        if (!server.isEmpty()) s.addProperty("server", server);
+        return s;
     }
 
     static String offline(String name) {

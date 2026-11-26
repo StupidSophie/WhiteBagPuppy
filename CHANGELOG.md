@@ -10,6 +10,12 @@ Download the latest from [Releases](../../releases/latest).
   else), and the bot keeps them all, counting each bag once. A fresh install or a restored backup no longer resets
   your count.
 
+## 2.30.50
+- Who's online also counts guildmates who only walked past you between updates (a busy Nexus, someone running by in a realm), not just the ones in view at that moment.
+
+## 2.30.49
+- Which server you're on: the pup works it out from the realm names on atti.network (after a realm or two on a new server) and remembers it in server-ips.txt, then says it in the diary. It goes to Biscuit with who's online, for guildmates near you too, so /online and /offline show the server.
+
 ## 2.30.48
 - Who's online: with a Biscuit link, the pup tells Biscuit about once a minute that you're playing (name, class, where you are and your party), and which guildmates it can see near you. Type /online in Discord to see who's on, and /online player:name for when someone was last seen. Ticked from the start; untick "Tell my guild's Biscuit when I'm online" in Settings > Guild deaths to stop. (The game's guild list comes from Deca's website, which the pup can't read, so people only show up when they or a guildmate near them has the pup.)
 
