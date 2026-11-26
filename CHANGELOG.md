@@ -3,6 +3,13 @@
 What's new in each version of White Bag Puppy, newest first.
 Download the latest from [Releases](../../releases/latest).
 
+## 2.30.51
+
+- **White bags add up across computers.** The friends leaderboard (and femcore.gay) now counts your white bags from
+  every PC you play on: each pup tells the bot which bags it has seen (when each dropped and its first item, nothing
+  else), and the bot keeps them all, counting each bag once. A fresh install or a restored backup no longer resets
+  your count.
+
 ## 2.30.50
 - Who's online also counts guildmates who only walked past you between updates (a busy Nexus, someone running by in a realm), not just the ones in view at that moment.
 
