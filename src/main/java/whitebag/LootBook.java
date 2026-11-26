@@ -46,6 +46,8 @@ final class LootBook {
 
     private static List<Item> shinies;
     private static Map<Integer, Item> shinyById;
+    /** Shinies the game files list more than once: the entry, and how many copies. */
+    private static Map<Item, Integer> shinyCopies = new java.util.LinkedHashMap<>();
     private static final java.util.regex.Pattern INTERNAL =
             java.util.regex.Pattern.compile("(?i)\\b(proc[a-z0-9]*|proj(ectile)?|effect|test)\\b|proc\\d|procs?[a-d]$|test$");
 
@@ -60,6 +62,10 @@ final class LootBook {
         if (!LootImage.gameSpritesReady && ItemXml.ids().isEmpty()) return Collections.emptyList();
         List<Item> out = new ArrayList<>();
         Map<Integer, Item> byId = new HashMap<>();
+        // the game files can list the same shiny more than once (under different ids): one book entry each, and
+        // every id counts for it
+        Map<String, Item> byName = new HashMap<>();
+        Map<Item, Integer> copies = new java.util.LinkedHashMap<>();
         for (int id : ItemXml.ids()) {
             String labels;
             try {
@@ -74,10 +80,18 @@ final class LootBook {
             boolean ut = l.contains("UT") || l.contains("TAB_UT"), st = l.contains("ST") || l.contains("TAB_ST");
             if (!ut && !st) continue;
             String name = ItemInfo.of(id).name;
-            String base = name.endsWith(" Shiny") ? name.substring(0, name.length() - 6).trim() : name;
+            // "Coral Bow Shiny", "Shiny Coral Bow" and "Coral Bow (Shiny)" are all the shiny Coral Bow
+            String base = name.replaceAll("(?i)\\(\\s*shiny\\s*\\)|\\bshiny\\b", " ").replaceAll("\\s+", " ").trim();
             if (base.isEmpty() || INTERNAL.matcher(base).find()) continue;
+            Item same = byName.get(norm(base));
+            if (same != null) {
+                byId.put(id, same);
+                copies.merge(same, 2, (a, b) -> a + 1);
+                continue;
+            }
             Item it = new Item(base + " (Shiny)", st && !ut ? "ST" : "UT");
             it.id = id;
+            byName.put(norm(base), it);
             Item normal = items.get(norm(base));
             if (normal != null) it.places.addAll(normal.places);
             else it.places.add("Other");
@@ -88,6 +102,21 @@ final class LootBook {
         if (out.isEmpty() && !idsMatched) return out; // game files not read yet: try again later
         shinies = out;
         shinyById = byId;
+        shinyCopies = copies;
+        return out;
+    }
+
+    /** "Coral Bow (Shiny) ×2 (Ocean Trench)" for each shiny the game files list more than once, by dungeon then name. */
+    static synchronized List<String> shinyMerges() {
+        shinies();
+        List<Map.Entry<Item, Integer>> l = new ArrayList<>(shinyCopies.entrySet());
+        l.sort((a, b) -> {
+            int c = String.join(",", a.getKey().places).compareToIgnoreCase(String.join(",", b.getKey().places));
+            return c != 0 ? c : a.getKey().name.compareToIgnoreCase(b.getKey().name);
+        });
+        List<String> out = new ArrayList<>();
+        for (Map.Entry<Item, Integer> e : l)
+            out.add(e.getKey().name + " ×" + e.getValue() + " (" + String.join(", ", e.getKey().places) + ")");
         return out;
     }
 

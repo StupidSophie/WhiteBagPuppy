@@ -23,6 +23,10 @@ final class BadgesPage extends MoreTabs.Page {
     /** Whether new badges get posted to Discord (setting badges.post), and a way to change it. */
     static volatile java.util.function.BooleanSupplier posting = () -> true;
     static volatile java.util.function.Consumer<Boolean> setPosting = b -> { };
+    /** Moves one account ID's saved data into another (old key, new key); set by the app. */
+    static volatile java.util.function.BiConsumer<String, String> moveAccount = (a, b) -> { };
+    /** Writes what the pup knows about accounts and connections to the diary; set by the app. */
+    static volatile Runnable diagnose = () -> { };
     /** Checks for newly earned badges (set by the main window), run when the page is opened. */
     Runnable checkNow = () -> { };
     private static final String[] SHOW = {"Up next", "Unlocked", "All", "Dungeons"};
@@ -49,7 +53,38 @@ final class BadgesPage extends MoreTabs.Page {
         gap(8);
         if (key == null || key.isEmpty()) {
             list.add(note("Start watching and load into the game once, and your badges show up here."));
+            gap(8);
+            Pixel.Button why = new Pixel.Button("Still empty? Write what the pup sees to the diary", false);
+            why.addActionListener(e -> diagnose.run());
+            JPanel r = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+            r.setOpaque(false);
+            r.add(why);
+            r.setMaximumSize(new Dimension(Integer.MAX_VALUE, r.getPreferredSize().height));
+            list.add(left(r));
             return;
+        }
+        if (n < 20) {
+            // few here, but more badges saved under another account ID (the game can give an account a new one)
+            for (AccountMerge.Found f : AccountMerge.accounts()) {
+                if (f.key.equals(key) || f.badges <= n) continue;
+                list.add(note((n == 0 ? "No badges on this account yet" : "Only " + n + " badges on this account") + ", but the pup has " + f.badges + " badges saved under another account ID: " + f.label()
+                        + ". If that's you (from before a name change, say), move them here."));
+                gap(6);
+                Pixel.Button move = new Pixel.Button("Move " + (f.name.isEmpty() ? "those" : f.name + "'s") + " " + f.badges + " badges and stats here", true);
+                move.addActionListener(e -> {
+                    int ok = JOptionPane.showConfirmDialog(this, "Move everything saved under " + f.label() + "\ninto this account?\n\n"
+                            + "Only if it's really yours. A backup is made first.", "Move badges here", JOptionPane.OK_CANCEL_OPTION);
+                    if (ok != JOptionPane.OK_OPTION) return;
+                    moveAccount.accept(f.key, key);
+                    changed();
+                });
+                JPanel r = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+                r.setOpaque(false);
+                r.add(move);
+                r.setMaximumSize(new Dimension(Integer.MAX_VALUE, r.getPreferredSize().height));
+                list.add(left(r));
+                gap(14);
+            }
         }
         Badges.Stats s = Badges.stats(key, mine);
         list.add(new AboutMe.AbilityBar("Badges unlocked", n + " / " + Badges.ALL.size(), n / (double) Badges.ALL.size()));

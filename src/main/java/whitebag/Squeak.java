@@ -106,6 +106,26 @@ final class Squeak {
         playAsync(pcm(bell(1568, 0.12), bell(2093, 0.3)), true);
     }
 
+    /** A shiny item dropped: sounds/shiny.wav, else a sparkly run of bells. */
+    static void playShiny() {
+        if (!enabled) return;
+        for (String ext : EXTENSIONS) {
+            java.io.File f = new java.io.File(SOUND_DIR, "shiny" + ext);
+            if (f.isFile() && playFile(f)) return;
+        }
+        playAsync(pcm(bell(1568, 0.09), bell(1976, 0.09), bell(2349, 0.09), bell(3136, 0.4)), true);
+    }
+
+    /** Something that's killed you before is here: sounds/danger.wav, else two low warning bells. */
+    static void playDanger() {
+        if (!enabled) return;
+        for (String ext : EXTENSIONS) {
+            java.io.File f = new java.io.File(SOUND_DIR, "danger" + ext);
+            if (f.isFile() && playFile(f)) return;
+        }
+        playAsync(pcm(bell(523, 0.2), bell(392, 0.2), bell(523, 0.2), bell(392, 0.4)), true);
+    }
+
     /** "Oryx's Sanctuary" -> "oryxs-sanctuary", used for sound file names. */
     static String slug(String name) {
         return name.toLowerCase(java.util.Locale.ROOT).replace("'", "").replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
@@ -178,7 +198,7 @@ final class Squeak {
                     + "  white.wav, red.wav, orange.wav, gold.wav, egg.wav, blue.wav, cyan.wav\r\n\r\n"
                     + "Boosted bags use the same sound, unless you add one just for them:\r\n"
                     + "  boosted-white.wav, boosted-red.wav, boosted-orange.wav, boosted-gold.wav, boosted-egg.wav, boosted-blue.wav, boosted-cyan.wav\r\n\r\n"
-                    + "Events tab: event.wav for realm events, key-pop.wav for key pops, realm-closed.wav for closing realms,\r\n"
+                    + "Chat > Events: event.wav for realm events, key-pop.wav for key pops, realm-closed.wav for closing realms,\r\n"
                     + "or one file per event or dungeon named after it, like cube-god.wav or the-shatters.wav.\r\n\r\n"
                     + "Use .wav files (.aiff and .au work too). MP3 doesn't work, so convert it to .wav first,\r\n"
                     + "for example with Audacity or an online converter. Keep them short, a second or two.\r\n"

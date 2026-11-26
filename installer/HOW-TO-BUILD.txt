@@ -1,0 +1,8 @@
+White Bag Puppy.exe = launcher/installer (wbp.c) + a zip of: runtime\ (a Windows Java runtime), WhiteBagPuppy.jar, pup.ico, README.txt.
+
+1. Compile the launcher (any OS, with zig: pip install ziglang):
+   python -m ziglang cc -target x86_64-windows-gnu -O2 -s -municode -Wl,--subsystem,windows -o stub.exe wbp.c wbp.rc -lshell32 -lole32 -luuid
+2. Make a payload folder with runtime\ (e.g. the java-runtime folder from the jdk4py win_amd64 wheel on PyPI,
+   or any Windows JRE 17+ with java.desktop), WhiteBagPuppy.jar, pup.ico and README.txt (payload-README.txt).
+3. python build.py payload stub.exe "White Bag Puppy.exe" <version text>
+   Change the version text whenever the payload changes, so the exe reinstalls.

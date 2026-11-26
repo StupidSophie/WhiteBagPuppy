@@ -158,6 +158,9 @@ final class ShattersPuzzle {
     private final Set<Integer> logged = new HashSet<>();
     private boolean inShatters;
     private int lastBoard = -1;
+    /** A board that changed less than 400 ms ago (-1: none). */
+    private int pendingBoard = -1;
+    private long pendingAt;
 
     ShattersPuzzle(Listener listener) {
         this.listener = listener;
@@ -175,6 +178,7 @@ final class ShattersPuzzle {
         inShatters = map.toLowerCase(Locale.ROOT).contains("shatters");
         towers.clear();
         lastBoard = -1;
+        pendingBoard = -1;
     }
 
     /** True for an object that looks like a puzzle tower. */
@@ -217,10 +221,15 @@ final class ShattersPuzzle {
                     t.y = o.status.pos.y;
                 }
                 t.green = colourOf(name);
-                if (t.green != null) learn(t.type, t.green);
+                note("seen", t, name, o.status.stats);
+                // only the on/off towers are the board: the puzzle's setup, switcher and "locked" objects sit
+                // on top of the towers and would spoil the 3x3 grid
+                if (t.green == null) continue;
+                learn(t.type, t.green);
+                // a shot tower is replaced by a new object in the same spot: drop the old one if the game didn't
+                towers.values().removeIf(old -> Math.abs(old.x - t.x) < 0.5f && Math.abs(old.y - t.y) < 0.5f);
                 towers.put(t.id, t);
                 changed = true;
-                note("seen", t, name, o.status.stats);
             }
         }
         if (p.drops != null) for (int id : p.drops) if (towers.remove(id) != null) changed = true;
@@ -228,6 +237,15 @@ final class ShattersPuzzle {
     }
 
     private synchronized void onNewTick(Packet packet) {
+        // a shot flips up to five towers, which can arrive over a few packets: report the board once it settles
+        if (pendingBoard >= 0 && System.currentTimeMillis() - pendingAt >= 400) {
+            int b = pendingBoard;
+            pendingBoard = -1;
+            if (b != lastBoard) {
+                lastBoard = b;
+                listener.boardSeen(b);
+            }
+        }
         if (!inShatters || towers.isEmpty()) return;
         NewTickPacket p = (NewTickPacket) packet;
         if (p.status == null) return;
@@ -254,9 +272,9 @@ final class ShattersPuzzle {
                 if (g == null) return; // can't tell the colours from the names (see puzzle-debug.txt)
                 if (g) green |= 1 << cell[k];
             }
-            if (green != lastBoard) {
-                lastBoard = green;
-                listener.boardSeen(green);
+            if (green != (pendingBoard >= 0 ? pendingBoard : lastBoard)) {
+                pendingBoard = green;
+                pendingAt = System.currentTimeMillis();
             }
             return;
         }

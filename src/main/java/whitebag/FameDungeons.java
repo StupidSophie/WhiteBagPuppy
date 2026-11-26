@@ -57,6 +57,21 @@ final class FameDungeons {
     }
 
     private static Map<String, Char> chars;
+    /** Told whenever a character's list changes (a dungeon done, the game's counts, a tick by hand), to redraw at once. */
+    private static final java.util.List<Runnable> listeners = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    static void addListener(Runnable r) {
+        listeners.add(r);
+    }
+
+    private static void fire() {
+        for (Runnable r : listeners) {
+            try {
+                r.run();
+            } catch (Exception ignored) {
+            }
+        }
+    }
 
     private static String key(String account, int id) {
         return account + ":" + id;
@@ -121,6 +136,7 @@ final class FameDungeons {
                     StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (Exception ignored) {
         }
+        fire();
     }
 
     /** The name a game map ("The Shatters") goes by in the fame bonuses (or the dungeon list), or null if it isn't a dungeon. */
@@ -281,6 +297,55 @@ final class FameDungeons {
         Char c = get(account, charId);
         if (label == null || label.isEmpty() || (c != null && label.equals(c.label))) return;
         write(account, charId, "#name", label);
+    }
+
+    /** The dungeon fame bonuses this character has earned: {percent of base fame, flat fame}. */
+    static double[] earned(Char c) {
+        double pct = 0, flat = 0;
+        if (c == null) return new double[]{0, 0};
+        for (Bonuses.Set set : Bonuses.sets()) {
+            boolean all = !set.dungeons.isEmpty();
+            for (String d : set.dungeons) if (!c.has(d)) all = false;
+            if (all) {
+                pct += set.percent;
+                flat += set.fame;
+            }
+        }
+        for (Bonuses.Tiers t : Bonuses.tiers().values()) {
+            int n = c.times(t.dungeon);
+            for (int k = 0; k < t.times.length; k++) if (n >= t.times[k]) flat += t.fame[k];
+        }
+        return new double[]{pct, flat};
+    }
+
+    /** The closest bonus still to get: "Snake Pit finishes First Steps (+2.5% and +100)" or a tier, or null. */
+    static String nextBonus(Char c) {
+        if (c == null) return null;
+        String best = null;
+        int bestLeft = Integer.MAX_VALUE;
+        for (Bonuses.Set set : Bonuses.sets()) {
+            java.util.List<String> left = new java.util.ArrayList<>();
+            for (String d : set.dungeons) if (!c.has(d)) left.add(d);
+            if (left.isEmpty() || left.size() >= bestLeft) continue;
+            bestLeft = left.size();
+            String pct = set.percent == Math.rint(set.percent) ? String.valueOf((int) set.percent) : String.valueOf(set.percent);
+            best = (left.size() == 1 ? left.get(0) + " finishes " : left.size() + " dungeons left for ") + set.name
+                    + " (+" + pct + "% and +" + String.format(java.util.Locale.ROOT, "%,d", set.fame) + " fame)";
+        }
+        for (Bonuses.Tiers t : Bonuses.tiers().values()) {
+            int n = c.times(t.dungeon);
+            for (int k = 0; k < t.times.length; k++) {
+                if (n >= t.times[k] || n == 0) continue;
+                int need = t.times[k] - n;
+                if (need < bestLeft) {
+                    bestLeft = need;
+                    best = need + " more " + t.dungeon + (need == 1 ? " run" : " runs") + " for " + Bonuses.TIER_NAMES[k]
+                            + " (+" + String.format(java.util.Locale.ROOT, "%,d", t.fame[k]) + " fame)";
+                }
+                break;
+            }
+        }
+        return best;
     }
 
     static synchronized Char get(String account, int charId) {

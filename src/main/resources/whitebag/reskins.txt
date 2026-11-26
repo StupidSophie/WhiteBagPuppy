@@ -1,0 +1,252 @@
+# reskin|tier of the original|original (from RealmEye's "Reskin of" lines)
+Acidic Slasher|UT|Ancient Stone Sword
+Advent Seal|T6|Seal of the Blessed Champion
+Almandine Armor of Anger|T12|Acropolis Armor
+Almandine Ring of Wrath|T6|Ring of Unbound Health
+An Icicle|T11|Agateclaw Dagger
+Anteros Longbow|T11|Crimson Longbow
+Arctic Bow|UT|Coral Bow
+Beach Shovel|T13|Spellblade of the Heavens Light
+Beach Umbrella|T13|Divine Flail
+Beastly Mane|ST|Tricorne of the High Seas
+Blazon Bow|UT|Thousand Shot
+Blossom Bow|T13|Bow of Mystical Energy
+Bone Bow|ST|Deathless Crossbow
+Botany Book|UT|Tome of Purification
+Bottled Lemonade|UT|Bottled Medusozoan
+Bow of Eternal Frost|T11|Bow of Innocent Blood
+Bow of Nightmares|T11|Bow of Innocent Blood
+Bow of the Morning Star|UT|Doom Bow
+Bow of the Sky's Glory|T12|Bow of Covert Havens
+Burlap Hat|ST|Rusty Cuffs
+Chocsicle|UT|Pirate King's Cutlass
+Cloak of Eerie Trepidation|UT|Cloak of Bloody Surprises
+Cloak of Winter|T6|Cloak of Ghostly Concealment
+Coalbearing Quiver|T6|Quiver of Elvish Mastery
+Collarbone Collar|ST|Revenant Ring
+Comet of Calamity|UT|Tezcacoatl's Tail
+Coral Soda|UT|Coral Bow
+Corrosion Cutter|UT|Queen's Stinger
+Corrupted Cleaver|T11|Muramasa
+Cuirass of the Black Blade|T12|Acropolis Armor
+Cupid's Bow|T11|Bow of Innocent Blood
+Cupid's Garments|UT|Coral Silk Armor
+Cursed Harpoon|ST|Tideturner Trident
+Dagger of Eternal Chaos|T12|Dagger of Foul Malevolence
+Dagger of the Amethyst Prism|T12|Dagger of Foul Malevolence
+Dagger of the Hasteful Rabbit|T12|Dagger of Foul Malevolence
+Dagger of the Terrible Talon|T11|Agateclaw Dagger
+Depth Charge|ST|Slurpian Sea Scroll
+Devil Horn Headband|ST|Performer's Hat
+Devilish Robes|ST|Magician's Robe
+Diamond-Bladed Katana|T11|Muramasa
+Diving Weights|ST|Imperial Keepsake
+Dual Pops|T13|Moonstone Blades
+Dueling Daggers|UT|Corruption Cutter
+Eggre Battle Armor|UT|Fire Dragon Battle Armor
+Enchanted Ice Blade|UT|Crystal Sword
+Enchanted Ice Shard|UT|Ring of the Sphinx
+Eternal Bloom Wand|T13|Wand of Evocation
+Eternal Echo|UT|Divinity
+Eternal Graved Great Sword|UT|Ancient Stone Sword
+Eternal Snowflake Wand|UT|Wand of the Bulwark
+Executioner's Garb|ST|Toga Picta
+Fire Blade|UT|Doku No Ken
+Flip-Flops|T13|Morning Star of Conjuration
+Floral Edge Katana|T13|Sadamune
+Floral Guard Armor|T13|Dominion Armor
+Foramite Staff|UT|Spirit Staff
+Frimarra|UT|Ring of the Pyramid
+Frost Citadel Armor|T12|Acropolis Armor
+Frost Drake Hide Armor|T12|Hydra Skin Armor
+Frost Elementalist Robe|T12|Robe of the Grand Sorcerer
+Frost Lich's Finger|T12|Dagger of Foul Malevolence
+Frostbite|T11|Skysplitter Sword
+Frosty's Walking Stick|T12|Staff of the Cosmic Whole
+Frozen Wand|UT|Crystal Wand
+Gaseous Glaive|UT|Pirate King's Cutlass
+Ghastly Mace|ST|B.O.O.M.
+Gravekeeper's Scythe|ST|Edictum Praetoris
+Greedsnatcher Trap|T6|Giantcatcher Trap
+Grim Goblet|ST|Interregnum
+Heart Jewel Blades|T11|Occult Blades
+Heartbreaker Wand|ST|Magic Wand
+Heartfind Dagger|T11|Agateclaw Dagger
+Heartstruck Bow|UT|Leaf Bow
+Hellfire Broadsword|ST|Pixie-Enchanted Sword
+Helm of the Jack-o'-naut|UT|Helm of the Juggernaut
+Holly Poison|T6|Baneserpent Poison
+Hooded Skull|ST|Memento Mori
+Horned Ring|ST|Ring of Pure Wishes
+Hydroflow Cloak|T6|Cloak of Ghostly Concealment
+Hydroflow Helm|T6|Helm of the Great General
+Hydroflow Mace|T6|Sovereign Mace
+Hydroflow Orb|T6|Planefetter Orb
+Hydroflow Poison|T6|Baneserpent Poison
+Hydroflow Prism|T6|Prism of Apparitions
+Hydroflow Quiver|T6|Quiver of Elvish Mastery
+Hydroflow Scepter|T6|Scepter of Storms
+Hydroflow Seal|T6|Seal of the Blessed Champion
+Hydroflow Sheath|T6|Great Shinobi Sheath
+Hydroflow Shield|T6|Colossus Shield
+Hydroflow Sigil|T6|Sigil of the Horse
+Hydroflow Singing Glass|T6|Skyward Lute
+Hydroflow Skull|T6|Bloodsucker Skull
+Hydroflow Spell|T6|Elemental Detonation Spell
+Hydroflow Star|T6|Doom Circle
+Hydroflow Tome|T6|Tome of Holy Guidance
+Hydroflow Trap|T6|Giantcatcher Trap
+Hydroflow Wakizashi|T6|Royal Wakizashi
+Ice Crown|UT|The Forgotten Crown
+Icicle Launcher|T12|Bow of Covert Havens
+Ilex Star|T6|Doom Circle
+Immortal Mantle|ST|Twilight Shroud
+Jacket Of Blossoms|T13|Wyrmhide Armor
+Kagebooshi|UT|Kageboshi
+Lacerated Gown|ST|A.R.M.O.R.
+Leaf Woven Robe|T13|Robe of the Star Mother
+Legion Elite Bow|T13|Bow of Mystical Energy
+Legion Elite Cloak|T6|Cloak of Ghostly Concealment
+Legion Elite Dagger|T13|Dagger of Sinister Deeds
+Legion Elite Drums|T6|Skyward Lute
+Legion Elite Helm|T6|Helm of the Great General
+Legion Elite Katana|T13|Sadamune
+Legion Elite Leather Armor|T13|Wyrmhide Armor
+Legion Elite Mace|T6|Sovereign Mace
+Legion Elite Orb|T6|Planefetter Orb
+Legion Elite Plate Armor|T13|Dominion Armor
+Legion Elite Poison|T6|Baneserpent Poison
+Legion Elite Prism|T6|Prism of Apparitions
+Legion Elite Quiver|T6|Quiver of Elvish Mastery
+Legion Elite Robe|T13|Robe of the Star Mother
+Legion Elite Scepter|T6|Scepter of Storms
+Legion Elite Seal|T6|Seal of the Blessed Champion
+Legion Elite Sheath|T6|Great Shinobi Sheath
+Legion Elite Shield|T6|Colossus Shield
+Legion Elite Sigil|T6|Sigil of the Horse
+Legion Elite Skull|T6|Bloodsucker Skull
+Legion Elite Spell|T6|Elemental Detonation Spell
+Legion Elite Staff|T13|Staff of the Vital Unity
+Legion Elite Star|T6|Doom Circle
+Legion Elite Sword|T13|Sword of Splendor
+Legion Elite Tome|T6|Tome of Holy Guidance
+Legion Elite Trap|T6|Giantcatcher Trap
+Legion Elite Wakizashi|T6|Royal Wakizashi
+Legion Elite Wand|T13|Wand of Evocation
+Life Jacket|T13|Wyrmhide Armor
+Longbow of Spirits and Shadows|UT|Hama Yumi
+Love Heart Spellblade|T11|Spellblade of Starry Insight
+Lovesick Scepter|ST|Lightshow Scepter
+Lovestruck Yoyo|T11|Mithril Flail
+Mace of the North Pole|T6|Sovereign Mace
+Maize Machete|ST|Carved Golem Remains
+Moonbeam Blade|UT|Ray Katana
+Moonstone Ring|ST|First Mate's Hook
+Morning Star Of Sweet Miracles|T11|Morning Star of Harrowing Memories
+Nativity Tome|T6|Tome of Holy Guidance
+Neo Acidic Slasher|UT|Ancient Stone Sword
+Neo Blazon Bow|UT|Thousand Shot
+Neo Comet of Calamity|UT|Tezcacoatl's Tail
+Neo Corrosion Cutter|UT|Queen's Stinger
+Neo Dueling Daggers|UT|Corruption Cutter
+Neo Fire Blade|UT|Doku No Ken
+Neo Foramite Staff|UT|Spirit Staff
+Neo Gaseous Glaive|UT|Pirate King's Cutlass
+Neo Moonbeam Blade|UT|Ray Katana
+Neo Snowblind Wand|UT|Wand of the Fallen
+Neo Sun's Judgement|UT|Doom Bow
+Neo Warlord Wand|UT|Crystal Wand
+Orb of Terror|UT|Orb of Conflict
+Orb of the Sabbath|ST|Soul of the Bearer
+Ornamental Prism|T6|Prism of Apparitions
+Oryxmas Carol|T6|Skyward Lute
+Pathfinder's Helm|T6|Helm of the Great General
+Peppermint Wakizashi|T6|Royal Wakizashi
+Petal Strike Sword|T13|Sword of Splendor
+Phantasm Dirk|UT|Dirk of Cronus
+Phantom Pendant|ST|Defiled Equilibrium
+Phosphorescent Rags|ST|Oceanic Apparel
+Pirate Queen's Brigandine|T12|Hydra Skin Armor
+Pool Noodle|T13|Sunset Tachi
+Present Dispensing Wand|T11|Wand of Ancient Warning
+Pumpkin Prism|ST|Brain of the Golem
+Quiver of Dazing Love|UT|Quiver of Thunder
+Ragetorn Armor|ST|Naval Uniform
+Resounding Shield|T6|Colossus Shield
+Retrowinds Bow|T13|Bow of Mystical Energy
+Retrowinds Dagger|T13|Dagger of Sinister Deeds
+Retrowinds Heavy Armor|T13|Dominion Armor
+Retrowinds Katana|T13|Sadamune
+Retrowinds Leather Armor|T13|Wyrmhide Armor
+Retrowinds Robe|T13|Robe of the Star Mother
+Retrowinds Staff|T13|Staff of the Vital Unity
+Retrowinds Sword|T13|Sword of Splendor
+Retrowinds Wand|T13|Wand of Evocation
+Ring Of Radiant Petals|T6|Ring of Unbound Health
+Ring of Unbound Love|T6|Ring of Unbound Health
+Ring of the Burning Sun|T6|Ring of Unbound Defense
+Ring of the Northern Light|UT|Ring of the Nile
+Robe of the Enchantress|ST|Soulless Robe
+Robe of the Summer Solstice|T12|Robe of the Grand Sorcerer
+Rosebite Dagger|T13|Dagger of Sinister Deeds
+Rusted Mechanism|UT|Overclocking Amulet
+Sacrilege Seal|ST|Seal of the Enchanted Forest
+Saint Nicolas' Blade|T12|Sword of Acclaim
+Sakura Wakizashi|UT|Wakizashi of Eastern Winds
+Salju|T11|Muramasa
+Savage Claws|ST|Swashbuckler's Sickle
+Scepter of Sainthood|T6|Scepter of Storms
+Shield of Jawgmur|UT|Shield of Ogmur
+Skull of Krampus|T6|Bloodsucker Skull
+Skull-splitter Sword|T11|Skysplitter Sword
+Skybound Blade|T12|Masamune
+Snow Branch|UT|Elder Heartwood Staff
+Snowblind Wand|UT|Wand of the Fallen
+Snowbound Orb|T6|Planefetter Orb
+Snowflake Blade|UT|Celestial Blade
+Snowman's Sheath|T6|Great Shinobi Sheath
+Spectral Spell|ST|Ancient Eminence
+Spinal Quiver|ST|Quiver of Shrieking Specters
+Spooky Smasher|UT|Barnacle Basher
+Spriteful Shield|UT|Spiteful Scutum
+Staff of Adoration|T11|Staff of Astral Knowledge
+Staff of Horrific Knowledge|T11|Staff of Astral Knowledge
+Staff of Iceblast|UT|Staff of Extreme Prejudice
+Staff of Silver Wings|T12|Staff of the Cosmic Whole
+Staff of Yuletide Carols|T11|Staff of Astral Knowledge
+Staff of the Rising Sun|T12|Staff of the Cosmic Whole
+Stygian Torch|ST|The Phylactery
+Summer Dress|T13|Robe of the Star Mother
+Sun Hat|T6|Ring of Unbound Health
+Sun's Judgement|UT|Doom Bow
+Sunken Ring|UT|Corsair Ring
+Sunny Side Bow|UT|Thousand Shot
+Supernatural Staff|ST|Corruption Tether
+Sweetheart Taichi|T11|Accursed Tachi
+Swim Tube|T13|Dominion Armor
+Sword of Illumination|UT|Demon Blade
+Sword of the Mad God|T12|Sword of Acclaim
+Sword of the Unending Chaos|T12|Sword of Acclaim
+The Forgotten Ring|UT|Ring of Decades
+The Golden Forgotten Crown|UT|The Forgotten Crown
+Thousand Suns Spell|T6|Elemental Detonation Spell
+Tiara of Eggscellent Sturdiness|T6|Ring of Unbound Defense
+Tome of Frigid Protection|UT|Tome of Holy Protection
+Tormented Shriek|ST|C.L.A.W.
+Tormentor's Chainmail|ST|Fairy Plate
+Torso Tunic|ST|Wraith's Brigandine
+Trap of the Blood Spirit|UT|Trap of the Vile Spirit
+Unresolved Grudge|ST|C.O.N.T.R.O.L.L.E.R.
+Vigil Spell|T6|Elemental Detonation Spell
+Vinesword|T11|Skysplitter Sword
+Wand of Ancient Terror|T11|Wand of Ancient Warning
+Wand of Budding Romance|T11|Wand of Ancient Warning
+Wand of Egg-cellence|T11|Wand of Ancient Warning
+Wand of the Summoned One|T12|Wand of Recompense
+Wanderer's Cape|T12|Robe of the Grand Sorcerer
+Warlord Wand|UT|Crystal Wand
+Water Pistol|T13|Longbow of the Morning Spirit
+Winter's Breath Wand|T12|Wand of Recompense
+Witch's Brooch|ST|Ring of the Covetous Heart
+Withered Poncho|ST|Golem Garments
+Yuki|T12|Masamune

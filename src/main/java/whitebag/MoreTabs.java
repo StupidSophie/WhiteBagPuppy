@@ -430,12 +430,14 @@ final class MoreTabs {
         void fill() {
             boolean on = RealmStockFeed.enabled();
             long ok = RealmStockFeed.lastOk();
-            list.add(heading("events", on ? (ok > 0 ? "Updated " + time(ok) : RealmStockFeed.status()) : null));
+            String from = RealmStockFeed.liveFrom;
+            list.add(heading("events", on ? (ok > 0 ? "Updated " + time(ok) + (from.isEmpty() ? "" : " from " + from) : RealmStockFeed.status()) : null));
             gap(6);
             list.add(note("Realm events, key pops and closing realms on every server, from RealmStock's event notifier "
-                    + "(realmstock.com). It checks every 15 seconds while turned on. Ticked ones play a sound and go in the pup diary."));
+                    + "(realmstock.com), or atti.network's Encounters list when RealmStock is down (atti has realm events and "
+                    + "closing realms, but no key pops). It checks every 15 seconds while turned on. Ticked ones play a sound and go in the pup diary."));
             gap(8);
-            Pixel.Check onBox = new Pixel.Check("Show the RealmStock feed", on);
+            Pixel.Check onBox = new Pixel.Check("Show the events feed", on);
             onBox.addActionListener(ev -> RealmStockFeed.setEnabled(onBox.isSelected()));
             Pixel.Button open = button("Open their page", () -> {
                 try {
@@ -443,8 +445,22 @@ final class MoreTabs {
                 } catch (Exception ignored) {
                 }
             });
-            list.add(row(onBox, Box.createHorizontalStrut(16), open));
+            Pixel.Button openAtti = button("Open atti's page", () -> {
+                try {
+                    Desktop.getDesktop().browse(new java.net.URI(RealmStockFeed.ATTI_PAGE_URL));
+                } catch (Exception ignored) {
+                }
+            });
+            list.add(row(onBox, Box.createHorizontalStrut(16), open, Box.createHorizontalStrut(8), openAtti));
             if (!on) return;
+            gap(8);
+            String[] sources = {"auto", "realmstock", "atti"};
+            int si = Math.max(0, java.util.Arrays.asList(sources).indexOf(RealmStockFeed.source()));
+            LogTabs.Segments srcSeg = new LogTabs.Segments(new String[]{"RealmStock, atti if it's down", "Only RealmStock", "Only atti.network"}, si,
+                    i -> RealmStockFeed.setSource(sources[i]));
+            srcSeg.setAlignmentX(Component.LEFT_ALIGNMENT);
+            srcSeg.setMaximumSize(new Dimension(Integer.MAX_VALUE, srcSeg.getPreferredSize().height));
+            list.add(srcSeg);
             if (ok == 0 || !RealmStockFeed.status().equals("Live")) {
                 gap(6);
                 list.add(note(RealmStockFeed.status()));

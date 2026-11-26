@@ -41,6 +41,31 @@ public final class LootImage {
     }
 
     /**
+     * Reads the sprite sheets again after the game files were re-read (the sprite loader normally reads them only once,
+     * so new items would stay a "?" until the pup restarts).
+     */
+    static synchronized void reloadSprites() {
+        try {
+            Class<?> fb = Class.forName("assets.SpriteFlatBuffer");
+            java.lang.reflect.Field sprites = fb.getDeclaredField("sprites");
+            sprites.setAccessible(true);
+            ((java.util.Map<?, ?>) sprites.get(null)).clear();
+            java.lang.reflect.Field notLoaded = fb.getDeclaredField("notLoaded");
+            notLoaded.setAccessible(true);
+            notLoaded.setBoolean(null, false);
+            java.lang.reflect.Method read = fb.getDeclaredMethod("readFlatBuffer");
+            read.setAccessible(true);
+            read.invoke(null);
+        } catch (Throwable e) {
+            System.out.println("Couldn't reload the sprite sheets: " + e);
+        }
+        try {
+            ImageBuffer.clear();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
      * Bag sprite for the embed thumbnail, or null if the sprite isn't available.
      */
     public static byte[] bagPng(int bagObjectType) {
@@ -158,6 +183,74 @@ public final class LootImage {
         }
         g.dispose();
         return png(out);
+    }
+
+    /**
+     * A slim death card: the character, then its equipment as bare pictures (no slots) on the pup's pink card with
+     * paws and hearts. Enchanted items glow in their enchantment colour, and each item has its tier in small letters
+     * under it. Null if no pictures are available.
+     */
+    static byte[] deathPng(int classType, int level, List<ItemInfo> gear) {
+        BufferedImage who = classType > 0 ? gameIcon(sprites.sprite(classType), SLOT, null) : null;
+        List<BufferedImage> icons = new ArrayList<>();
+        boolean any = who != null;
+        for (ItemInfo i : gear) {
+            BufferedImage icon = gameIcon(sprites.sprite(i.id), SLOT - 24, i.enchant == Enchant.NONE ? null : i.enchant.color);
+            icons.add(icon);
+            any |= icon != null;
+        }
+        if (!any) return null;
+        // the character on its own (no slot), then the gear exactly like a bag card
+        int n = gear.size(), lead = who != null ? SLOT + GAP : 0;
+        int w = PAD * 2 + lead + n * SLOT + Math.max(0, n - 1) * GAP, h = PAD * 2 + SLOT;
+        if (n == 0) w = PAD * 2 + SLOT;
+        BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = out.createGraphics();
+        Cute.smooth(g);
+        g.setColor(Cute.BG);
+        g.fill(new RoundRectangle2D.Double(0, 0, w, h, 28, 28));
+        g.setColor(Cute.CARD_EDGE);
+        g.setStroke(new BasicStroke(2f));
+        g.draw(new RoundRectangle2D.Double(1, 1, w - 2, h - 2, 28, 28));
+        Cute.drawPaw(g, w - 9, 13, 5, new Color(0xFFC2D4));
+        Cute.drawPaw(g, 8, h - 6, 5, new Color(0xFFC2D4));
+        if (who != null) {
+            g.drawImage(who, PAD + (SLOT - who.getWidth()) / 2, PAD + (SLOT - who.getHeight()) / 2, null);
+        }
+        for (int k = 0; k < n; k++) {
+            int x = PAD + lead + k * (SLOT + GAP);
+            drawSlot(g, x, PAD, gear.get(k), icons.get(k));
+        }
+        g.dispose();
+        return png(out);
+    }
+
+    /** A small rounded label whose bottom-right corner is at (right, bottom), with a white rim. */
+    private static void pill(Graphics2D g, String text, Color c, int right, int bottom) {
+        g.setFont(Cute.font(Font.BOLD, 11));
+        FontMetrics fm = g.getFontMetrics();
+        int bw = fm.stringWidth(text) + 12, bh = 17;
+        int bx = right - bw, by = bottom - bh;
+        g.setColor(Color.WHITE);
+        g.fill(new RoundRectangle2D.Double(bx - 2, by - 2, bw + 4, bh + 4, bh + 4, bh + 4));
+        g.setColor(c);
+        g.fill(new RoundRectangle2D.Double(bx, by, bw, bh, bh, bh));
+        g.setColor(Color.WHITE);
+        g.drawString(text, bx + 6, by + (bh - fm.getHeight()) / 2 + fm.getAscent());
+    }
+
+    /** A soft halo around a picture in the given colour (the game's enchantment glow). */
+    private static void glow(Graphics2D g, BufferedImage p, int x, int y, Color c) {
+        BufferedImage tint = new BufferedImage(p.getWidth(), p.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        for (int yy = 0; yy < p.getHeight(); yy++) {
+            for (int xx = 0; xx < p.getWidth(); xx++) {
+                if ((p.getRGB(xx, yy) >>> 24) > 0) tint.setRGB(xx, yy, (0x38 << 24) | (c.getRGB() & 0xFFFFFF));
+            }
+        }
+        int ox = x, oy = y;
+        for (int r = 6; r >= 2; r -= 2) {
+            for (int dx = -r; dx <= r; dx += r) for (int dy = -r; dy <= r; dy += r) g.drawImage(tint, ox + dx, oy + dy, null);
+        }
     }
 
     private static final int SLOT = 88;
@@ -325,6 +418,96 @@ public final class LootImage {
     /**
      * Game-style icon: 1px black outline at native size, then scaled up with crisp pixels.
      */
+    /**
+     * The game's own look, as on RealmEye's renders: the sprite with a 1-pixel dark outline and a small shadow at its
+     * own size, scaled up with crisp pixels, and (for enchanted items) a soft blurred glow in the enchantment colour.
+     */
+    static BufferedImage gameIcon(BufferedImage src, int box, Color glow) {
+        if (src == null || isBlank(src)) return null;
+        // the size step comes from the whole sprite cell, so every item is drawn at the same scale
+        int scale = Math.max(1, box / (Math.max(src.getWidth(), src.getHeight()) + 4));
+        // then crop to the drawn part, so the item sits in the middle of its slot
+        int minX = src.getWidth(), minY = src.getHeight(), maxX = -1, maxY = -1;
+        for (int y = 0; y < src.getHeight(); y++) {
+            for (int x = 0; x < src.getWidth(); x++) {
+                if ((src.getRGB(x, y) >>> 24) == 0) continue;
+                minX = Math.min(minX, x);
+                minY = Math.min(minY, y);
+                maxX = Math.max(maxX, x);
+                maxY = Math.max(maxY, y);
+            }
+        }
+        src = src.getSubimage(minX, minY, maxX - minX + 1, maxY - minY + 1);
+        int sw = src.getWidth(), sh = src.getHeight();
+        int w = sw + 4, h = sh + 4; // outline all round, the shadow down and right, and the same space up and left
+        BufferedImage nat = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int sx = x - 2, sy = y - 2;
+                int rgb = inside(src, sx, sy) ? src.getRGB(sx, sy) : 0;
+                if ((rgb >>> 24) > 0) {
+                    nat.setRGB(x, y, rgb);
+                } else if (opaque(src, sx + 1, sy) || opaque(src, sx - 1, sy) || opaque(src, sx, sy + 1) || opaque(src, sx, sy - 1)) {
+                    nat.setRGB(x, y, 0xE6141018); // outline: near black, a touch soft
+                }
+            }
+        }
+        // shadow: the outlined shape one pixel down and right, faint, behind it
+        BufferedImage shaded = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                if (x > 0 && y > 0 && (nat.getRGB(x - 1, y - 1) >>> 24) > 0) shaded.setRGB(x, y, 0x40000000);
+            }
+        }
+        Graphics2D sg = shaded.createGraphics();
+        sg.drawImage(nat, 0, 0, null);
+        sg.dispose();
+        int pad = glow == null ? 0 : 10;
+        int bw = w * scale, bh = h * scale;
+        BufferedImage out = new BufferedImage(bw + pad * 2, bh + pad * 2, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = out.createGraphics();
+        if (glow != null) {
+            // a soft halo: the shape in the glow colour, blurred
+            BufferedImage mask = new BufferedImage(out.getWidth(), out.getHeight(), BufferedImage.TYPE_INT_ARGB);
+            Graphics2D mg = mask.createGraphics();
+            mg.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+            mg.drawImage(nat, pad, pad, bw, bh, null);
+            mg.dispose();
+            int c = glow.getRGB() & 0xFFFFFF;
+            for (int y = 0; y < mask.getHeight(); y++) {
+                for (int x = 0; x < mask.getWidth(); x++) {
+                    int a = mask.getRGB(x, y) >>> 24;
+                    mask.setRGB(x, y, a > 0 ? (0xFF << 24) | c : 0);
+                }
+            }
+            BufferedImage blurred = blur(blur(mask, 4), 4);
+            g.drawImage(blurred, 0, 0, null);
+            g.drawImage(blurred, 0, 0, null); // twice: a stronger glow, like the game's
+        }
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+        g.drawImage(shaded, pad, pad, bw, bh, null);
+        g.dispose();
+        return out;
+    }
+
+    /** A box blur of radius r (alpha and colour). */
+    private static BufferedImage blur(BufferedImage src, int r) {
+        int k = r * 2 + 1;
+        float[] kern = new float[k * k];
+        java.util.Arrays.fill(kern, 1f / (k * k));
+        java.awt.image.ConvolveOp op = new java.awt.image.ConvolveOp(new java.awt.image.Kernel(k, k, kern), java.awt.image.ConvolveOp.EDGE_NO_OP, null);
+        BufferedImage padded = new BufferedImage(src.getWidth(), src.getHeight(), BufferedImage.TYPE_INT_ARGB_PRE);
+        Graphics2D g = padded.createGraphics();
+        g.drawImage(src, 0, 0, null);
+        g.dispose();
+        BufferedImage out = op.filter(padded, null);
+        BufferedImage res = new BufferedImage(src.getWidth(), src.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        Graphics2D rg = res.createGraphics();
+        rg.drawImage(out, 0, 0, null);
+        rg.dispose();
+        return res;
+    }
+
     static BufferedImage pixelIcon(BufferedImage src, int box) {
         if (src == null || isBlank(src)) return null;
         int w = src.getWidth() + 2, h = src.getHeight() + 2;
