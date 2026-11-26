@@ -25,6 +25,9 @@ final class LootStats {
         final List<Integer> items = new ArrayList<>();
         /** Each item's rarity (enchantment slots, 0-4), same order as items; may be shorter for old lines. */
         final List<Integer> rarity = new ArrayList<>();
+        /** Who looted it (class object type, character id; -1 for older bags) and which enemy dropped it ("" unknown). */
+        int charClass = -1, charId = -1;
+        String enemy = "";
 
         String line() {
             StringBuilder sb = new StringBuilder();
@@ -37,7 +40,8 @@ final class LootStats {
                 if (rs.length() > 0) rs.append(',');
                 rs.append(r);
             }
-            return at + "|" + type.name() + "|" + map.replace('|', '/') + "|" + sb + "|" + account.replace('|', '/') + "|" + rs;
+            return at + "|" + type.name() + "|" + map.replace('|', '/') + "|" + sb + "|" + account.replace('|', '/') + "|" + rs
+                    + "|" + charClass + "|" + enemy.replace('|', '/').replace('\n', ' ') + "|" + charId;
         }
 
         static Entry parse(String l) {
@@ -51,6 +55,9 @@ final class LootStats {
                 for (String id : f[3].split(",")) if (!id.trim().isEmpty()) e.items.add(Integer.parseInt(id.trim()));
                 if (f.length >= 5) e.account = f[4];
                 if (f.length >= 6) for (String r : f[5].split(",")) if (!r.trim().isEmpty()) e.rarity.add(Integer.parseInt(r.trim()));
+                if (f.length >= 7 && !f[6].trim().isEmpty()) e.charClass = Integer.parseInt(f[6].trim());
+                if (f.length >= 8) e.enemy = f[7];
+                if (f.length >= 9 && !f[8].trim().isEmpty()) e.charId = Integer.parseInt(f[8].trim());
                 return e;
             } catch (Exception ex) {
                 return null;
@@ -84,6 +91,9 @@ final class LootStats {
         e.at = drop.droppedAt;
         e.type = drop.type;
         e.map = drop.mapName == null ? "" : drop.mapName;
+        e.charClass = drop.charClass;
+        e.charId = drop.charId;
+        e.enemy = drop.enemy == null ? "" : drop.enemy;
         for (ItemInfo i : drop.items()) {
             e.items.add(i.id);
             e.rarity.add(i.enchant.ordinal());

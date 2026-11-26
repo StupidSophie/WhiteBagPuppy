@@ -28,6 +28,12 @@ final class BookPage extends MoreTabs.Page {
     private int book = 0;           // 0 UT and ST items, 1 their shiny versions
     private boolean allPlaces = false;
     private final JTextField search = Pixel.field("", 18, "Find an item or dungeon");
+
+    /** Fills in the search box (from the header's search). */
+    void search(String q) {
+        search.setText(q);
+        changed();
+    }
     private boolean searching = false;
 
     /** Posts a picture to Discord: (png, who it's for). Set by the main window. */
@@ -92,6 +98,36 @@ final class BookPage extends MoreTabs.Page {
         list.add(new AboutMe.AbilityBar(shiny ? "Every shiny UT and ST item" : "Every UT and ST item that drops in bags",
                 found.size() + " / " + total, found.size() / (double) total));
         gap(10);
+
+        // your newest finds: items looted for the first time, newest first
+        List<Map.Entry<LootBook.Item, LootBook.Found>> recent = new ArrayList<>();
+        for (Map.Entry<LootBook.Item, LootBook.Found> x : found.entrySet()) {
+            if (x.getValue().times > 0 && x.getValue().first < Long.MAX_VALUE) recent.add(x);
+        }
+        if (!recent.isEmpty()) {
+            recent.sort((a, b) -> Long.compare(b.getValue().first, a.getValue().first));
+            list.add(heading("recent finds", null));
+            gap(6);
+            java.text.SimpleDateFormat day = new java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.ENGLISH);
+            for (int i = 0; i < Math.min(6, recent.size()); i++) {
+                LootBook.Item it = recent.get(i).getKey();
+                LootBook.Found f = recent.get(i).getValue();
+                JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+                row.setOpaque(false);
+                if (it.id > 0) row.add(new AboutMe.ItemStrip(java.util.Collections.singletonList(it.id), null));
+                String where = f.where == null || f.where.isEmpty() ? "" : " in " + RunLog.label(f.where);
+                JLabel l = new JLabel("<html><b>" + escHtml(it.name) + "</b><br><span style='color:" + Theme.hex(0x8A7F99) + "'>First found "
+                        + day.format(new java.util.Date(f.first * 1000L)) + escHtml(where)
+                        + (f.times > 1 ? "  ·  looted " + f.times + " times" : "") + "</span></html>");
+                l.setFont(Cute.font(Font.PLAIN, 13));
+                l.setForeground(Pixel.INK);
+                row.add(l);
+                row.setMaximumSize(new Dimension(Integer.MAX_VALUE, row.getPreferredSize().height));
+                list.add(fit(row));
+                gap(4);
+            }
+            gap(10);
+        }
 
         JPanel controls = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         controls.setOpaque(false);
@@ -385,7 +421,7 @@ final class BookPage extends MoreTabs.Page {
             LootBook.Item it = items.get(i);
             LootBook.Found f = found.get(it);
             // a narrow box, and at most a few places (some items drop almost everywhere)
-            StringBuilder sb = new StringBuilder("<html><div style='width:260px'><b>").append(esc(it.name)).append("</b> (").append(it.tier).append(")<br>");
+            StringBuilder sb = new StringBuilder("<html><div style='width:260px'><b>").append(escHtml(it.name)).append("</b> (").append(it.tier).append(")<br>");
             List<String> where = it.places.size() > 6 ? it.places.subList(0, 5) : it.places;
             sb.append("Drops in: ").append(esc(String.join(", ", where)));
             if (it.places.size() > 6) sb.append(" and ").append(it.places.size() - 5).append(" more places");
@@ -466,5 +502,9 @@ final class BookPage extends MoreTabs.Page {
             }
             g.dispose();
         }
+    }
+
+    private static String escHtml(String s) {
+        return s == null ? "" : s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 }

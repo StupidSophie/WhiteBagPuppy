@@ -40,7 +40,7 @@ whenever the game updates. If your game is installed somewhere unusual, run
 ### Friends leaderboard (optional)
 
 If your recap link is a Femcore bot link (`https://.../recap?key=...`), tick **Join the friends leaderboard** under
-Recaps on the Webhooks tab. Every few minutes the pup sends your in-game name and totals (white bags, bags, runs,
+Recaps on Home > Settings. Every few minutes the pup sends your in-game name and totals (white bags, bags, runs,
 kills, fame, play time, badge and collection counts) to the bot, which keeps a live leaderboard in Discord.
 Nothing else is sent.
 
@@ -53,7 +53,7 @@ The **Backups** section on Home zips your logs, badges, settings and sounds into
 ### Badge posts (optional)
 
 New badges post to your bag webhook. To send them somewhere else, make another webhook and paste it under
-**Badges** on the Webhooks tab. **Send test post** shows what one looks like.
+**Badges** on Home > Settings. **Send test post** shows what one looks like.
 
 ### Recaps (optional)
 
@@ -90,7 +90,6 @@ Vault, Badges), **Chat** (Chat, Trades, Players), **Events** and **Puzzle**.
 - **About Me**: your character, play time, an exalt tracker for every class, and stats (with max and exaltations), gear with enchantments, your pet with a
   feeding planner, and the Tinkerer's quests (click to cross things off).
 - **Fame**: fame this session, per hour, a chart, and fame by dungeon.
-- **Vault**: your vault, potion storage and gift chest, with stat potion counts.
 - **Loot**: every bag seen (all colours), by dungeon, dry streaks ("23 Shatters runs since your last white"),
   drop rates ("1 white per 12 Shatters runs") and best drops.
 - **Collection**: every UT and ST item that can drop (and every shiny version), by dungeon, greyed out until you've
@@ -103,6 +102,12 @@ Vault, Badges), **Chat** (Chat, Trades, Players), **Events** and **Puzzle**.
 - **Holidays** and **Quest Chests** (Loot tab): event items by holiday, and what came out of your chests.
 - **Dark mode**: a tick box on Home (the pup restarts to switch, and wears pyjamas at night).
 - **Titles** (under Me): every title in the game, with the ones you've worn ticked off.
+- **Characters** (Me): every character with level, fame, stats, maxed count, gear and inventory.
+- **Loot History** (Loot): search every bag you've looted by item, dungeon, bag colour and date.
+- **Tinker Quests** (Me): your daily and weekly Tinkerer quests, what to bring and the rewards (open his quest window in game once).
+- **Vault** (Me): everything you own in one place (vault, potions, gift chest, spoils and every character), with a search box to find any item.
+- **Widget bar** under the header: your character, account fame, gold, rank, enchanting dust, forge fire, materials and play time.
+- **DPS Calc** (Fights): your weapon's damage per second from your ATT and DEX, against any enemy DEF, compared with your other weapons or any weapon by name.
 - **Mini overlay**: a small always-on-top window with your run timer, last white bag, fame per hour and next badge (switch on Home).
 - **Badges**: pup achievements that unlock as you play, announced on Discord.
 - **Puzzle**: a solver for The Shatters' Puzzle Room: the towers to shoot to turn them all green.
@@ -111,7 +116,7 @@ Vault, Badges), **Chat** (Chat, Trades, Players), **Events** and **Puzzle**.
   with tick boxes for what you care about, a search box, a region filter and a sound you can turn off.
 - **Recaps**: a daily and/or weekly summary for each account posted to its own Discord channel: your name and
   classes, bags, runs, luckiest dungeon, fame and time played, with all the loot as pictures you
-  flip through with arrows. Set it up under **Recaps** on the Webhooks tab.
+  flip through with arrows. Set it up under **Recaps** on Home > Settings.
 - **Two accounts at once**: each game client gets its own tabs; switch with the Account buttons.
 
 <p align="center"><img src="images/fame.png" alt="Fame tab" width="420"></p>
@@ -177,6 +182,7 @@ and publish. Add the new version to the top of `CHANGELOG.md` too.
 
 - The packet library is based on [RealmShark](https://github.com/X-com/RealmShark) by X-com (MIT licence).
 - The item rarity (enchantment) format follows [DaAwesomePwner's RealmShark fork](https://github.com/DaAwesomePwner/RealmShark) (MIT).
+- The Vault, Characters, Loot History, DPS Calc and widget bar are based on ideas (and the weapon DPS formulas) from [RealmHound](https://github.com/pillarzz/RealmHound) by Lovens & Pillar (MIT licence).
 - Where each UT and ST item drops (the Collection tab) comes from the [RealmEye wiki](https://www.realmeye.com/wiki).
   `tools/build_collection.py` rebuilds the list from the Femcore bot's `ut_items.json`.
 - The all-servers event feed comes from [RealmStock's event notifier](https://realmstock.com/pages/event-notifier).

@@ -30,13 +30,24 @@ final class MiniOverlay {
 
     /** The rows you can show (right-click > Rows), in the order they're drawn. */
     private static final String[][] ROWS = {
-            {"run", "This run"}, {"white", "Last white"}, {"dry", "Dry streak"}, {"fame", "Fame per hour"},
-            {"bags", "Bags this session"}, {"boost", "Loot boosts"}, {"badge", "Next badge"}};
+            {"run", "This run"}, {"dps", "Live DPS (top 3)"}, {"rundps", "Run DPS"}, {"white", "Last white"}, {"shiny", "Shinies"}, {"dry", "Dry streak"}, {"fame", "Fame per hour"},
+            {"bags", "Bags this session"}, {"boost", "Loot boosts"}, {"mods", "Dungeon mods"}, {"dust", "Dust"}, {"quests", "Tinker quests"}, {"badge", "Next badge"}};
+    /** Green, red and purple enchanting dust for the Dust row (null when the game hasn't said). */
+    private volatile int[] dustNow;
     private final java.util.Set<String> shownRows = new java.util.LinkedHashSet<>();
     /** Flash the overlay (and make the pup jump) when a white bag drops. */
     private boolean flash;
+    /** Show your own DPS next to the zone when the overlay is folded to just its title. */
+    private boolean foldedDps;
     private long flashUntil;
     private Timer flashTimer;
+    /** The glow colour of the current flash: pink for a white bag, gold for a shiny, red for danger. */
+    private volatile Color flashColour = Pixel.PINK;
+    /** "Careful: Septavius the Ghost God (killed you 2×)" in red under the title for a little while. */
+    private volatile String dangerText = "";
+    private volatile long dangerUntil;
+    private volatile String shinyText = "";
+    private long shinyAt;
     private volatile String dry = "";
 
     private final Supplier<List<Account>> accounts;
@@ -71,8 +82,26 @@ final class MiniOverlay {
         small = "true".equals(settings.get("overlay.small", "false"));
         seeThrough = "true".equals(settings.get("overlay.seeThrough", "false"));
         flash = !"false".equals(settings.get("overlay.flash", "true"));
-        String rows = settings.get("overlay.rows", "run,white,dry,fame,bags,boost,badge");
+        foldedDps = !"false".equals(settings.get("overlay.foldedDps", "true"));
+        String rows = settings.get("overlay.rows", "run,dps,rundps,white,dry,fame,bags,boost,dust,quests,badge");
         for (String r : rows.split(",")) if (!r.trim().isEmpty()) shownRows.add(r.trim());
+        if (!"true".equals(settings.get("overlay.questsAdded", "false"))) { // new row (2.17.0): on for everyone once
+            shownRows.add("quests");
+            settings.set("overlay.questsAdded", "true");
+        }
+        if (!"true".equals(settings.get("overlay.dpsAdded", "false"))) { // new rows (2.16.4): on for everyone once
+            shownRows.add("dps");
+            shownRows.add("rundps");
+            settings.set("overlay.dpsAdded", "true");
+        }
+        if (!"true".equals(settings.get("overlay.shinyAdded", "false"))) { // new row (2.21.0): on for everyone once
+            shownRows.add("shiny");
+            settings.set("overlay.shinyAdded", "true");
+        }
+        if (!"true".equals(settings.get("overlay.dustAdded", "false"))) { // new row (2.16.2): on for everyone once
+            shownRows.add("dust");
+            settings.set("overlay.dustAdded", "true");
+        }
         try {
             scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, Double.parseDouble(settings.get("overlay.scale", "1"))));
             width = Math.max(MIN_W, Math.min(MAX_W, Integer.parseInt(settings.get("overlay.width", String.valueOf(W)))));
@@ -118,11 +147,34 @@ final class MiniOverlay {
                 List<String> names = drop.itemNames();
                 lastWhite = names.isEmpty() ? "White bag" : names.get(0);
                 lastWhiteAt = System.currentTimeMillis();
-                if (flash) startFlash();
+                if (flash) startFlash(Pixel.PINK);
             }
             badgeCheckedAt = 0; // a bag can bring a badge closer
             painter.repaint();
         });
+    }
+
+    /** Something that killed you before is here: a red flash and a warning under the title (any thread). */
+    void danger(String text) {
+        SwingUtilities.invokeLater(() -> {
+            dangerText = text;
+            dangerUntil = System.currentTimeMillis() + 12_000;
+            startFlash(new Color(0xE0483E));
+        });
+    }
+
+    /** A shiny item dropped: a gold flash, and the Shinies row counts it (any thread). */
+    void shiny() {
+        SwingUtilities.invokeLater(() -> {
+            shinyAt = 0;
+            if (flash) startFlash(new Color(0xE8B12A));
+            painter.repaint();
+        });
+    }
+
+    void startFlash(Color c) {
+        flashColour = c;
+        startFlash();
     }
 
     /** A few seconds of glow and a jumping pup. */
@@ -147,9 +199,61 @@ final class MiniOverlay {
 
     private int fullHeight() {
         int n = 0;
-        for (String[] r : ROWS) if (shownRows.contains(r[0])) n++;
+        for (String[] r : ROWS) {
+            if (!shownRows.contains(r[0])) continue;
+            if (r[0].equals("dps")) n += 4; // the boss, then the top 3
+            else if (r[0].equals("quests")) n += Math.max(1, pinnedQuests(current()).size()) + (resetText(current()) == null ? 0 : 1); // a line per pinned quest, and the reset
+            else n++;
+        }
         return n == 0 ? SMALL_H : 89 + 25 * n;
     }
+
+    boolean foldedDps() {
+        return foldedDps;
+    }
+
+    /** Your DPS next to the zone on the folded overlay, on or off (Home and the overlay's menu). */
+    void setFoldedDps(boolean on) {
+        foldedDps = on;
+        settings.set("overlay.foldedDps", String.valueOf(on));
+        onFoldedDpsChanged.accept(on);
+        painter.repaint();
+    }
+
+    java.util.function.Consumer<Boolean> onFoldedDpsChanged = on -> { };
+
+    /**
+     * "Sophie  ·  30,400 dmg  ·  2,069/s  ·  " for the folded overlay: your name, then your damage and damage per second on
+     * the fight going on (else over the whole run). Just the name before you've hit anything.
+     */
+    private String myDps() {
+        Account a = current();
+        if (a == null) return "";
+        MeTracker.Thing me = a.me.character();
+        String name = me == null ? "" : DpsTracker.cleanName(me.s(packets.data.enums.StatType.NAME_STAT));
+        String head = name == null || name.isEmpty() ? "" : name + "  ·  ";
+        DpsTracker.Live live = live(a);
+        if (live == null) return head;
+        DpsTracker.Board b = live.fight != null && live.active ? live.fight : live.run;
+        if (b == null) return head;
+        for (DpsTracker.Row r : b.rows) {
+            if (r.you) return head + String.format(java.util.Locale.ROOT, "%,d dmg  ·  %,.0f/s  ·  ", r.damage, r.dps);
+        }
+        return head;
+    }
+
+    /** Whether this row is on (for the switch on Home). */
+    boolean showing(String id) {
+        return shownRows.contains(id);
+    }
+
+    /** Turns a row on or off (from Home); the overlay's own menu does the same. */
+    void show(String id, boolean on) {
+        SwingUtilities.invokeLater(() -> setRow(id, on));
+    }
+
+    /** Runs when a row is turned on or off from the overlay's menu, so the switch on Home can follow. */
+    java.util.function.BiConsumer<String, Boolean> onRowChanged = (id, on) -> { };
 
     private void setRow(String id, boolean show) {
         if (show) shownRows.add(id);
@@ -162,6 +266,7 @@ final class MiniOverlay {
         }
         settings.set("overlay.rows", b.toString());
         applySize();
+        onRowChanged.accept(id, show);
     }
 
     // ---------------------------------------------------------------- what's shown
@@ -183,6 +288,8 @@ final class MiniOverlay {
         }
         if (window == null) build();
         if (!window.isVisible()) window.setVisible(true);
+        int wantH = (int) Math.round((small ? SMALL_H : fullHeight()) * scale);
+        if (window.getHeight() != wantH) applySize(); // e.g. a quest was pinned or unpinned
         long now = System.currentTimeMillis();
         if (a != null && now - badgeCheckedAt > 60_000) {
             badgeCheckedAt = now;
@@ -248,6 +355,237 @@ final class MiniOverlay {
         return s / 60 + ":" + two(s % 60);
     }
 
+    /** Whose line is yours in the top 3 (drawn in pink). */
+    static final String YOU_MARK = "\u0001";
+
+    /** The Live DPS block: the boss you're fighting (or the last one), then the three biggest hitters. */
+    private List<String[]> topThree(Account a) {
+        List<String[]> out = new java.util.ArrayList<>();
+        DpsTracker.Live live = live(a);
+        DpsTracker.Board b = live == null ? null : live.fight;
+        out.add(new String[]{"Live DPS", b == null ? (live == null ? "No damage seen yet this run" : "Nothing hit lately")
+                : b.title + (live.active ? "" : b.killed ? "  (dead)" : "  (ended)")});
+        String[] places = {"1st", "2nd", "3rd"};
+        for (int i = 0; i < 3; i++) {
+            DpsTracker.Row r = b != null && i < b.rows.size() ? b.rows.get(i) : null;
+            if (r == null) {
+                out.add(new String[]{"   " + places[i], "-"});
+                continue;
+            }
+            String line = String.format(java.util.Locale.ROOT, "%s   %,.0f/s   %.0f%%", r.name, r.dps, r.percent);
+            out.add(new String[]{"   " + places[i], (r.you ? YOU_MARK : "") + line});
+        }
+        // not in the top 3: say where you are
+        if (b != null) {
+            for (int i = 3; i < b.rows.size(); i++) {
+                DpsTracker.Row r = b.rows.get(i);
+                if (r.you) {
+                    String[] last = out.get(3);
+                    out.set(3, new String[]{last[0], last[1] + "      (you: #" + (i + 1) + ", " + String.format(java.util.Locale.ROOT, "%,.0f/s)", r.dps)});
+                }
+            }
+        }
+        return out;
+    }
+
+    private DpsTracker.Live live(Account a) {
+        long now = System.currentTimeMillis();
+        if (a != liveFor || now - liveAt > 700) { // worked out at most a few times a second (the flash redraws much faster)
+            cachedLive = a == null ? null : a.dps.live();
+            liveFor = a;
+            liveAt = now;
+        }
+        return cachedLive;
+    }
+
+    private DpsTracker.Live cachedLive;
+    private Account liveFor;
+    private long liveAt;
+
+    /** "2,340/s #1/4 38% · Malphas" (your part of the fight going on, or the last one) or the whole run's. */
+    private String dpsText(Account a, boolean wholeRun) {
+        DpsTracker.Live live = live(a);
+        DpsTracker.Board b = live == null ? null : wholeRun ? live.run : live.fight;
+        if (b == null) return wholeRun ? "No damage yet this run" : "No boss fight yet";
+        DpsTracker.Row mine = null;
+        int rank = 0;
+        for (int i = 0; i < b.rows.size(); i++) {
+            if (b.rows.get(i).you) {
+                mine = b.rows.get(i);
+                rank = i + 1;
+            }
+        }
+        // the numbers first, so a long boss name is what gets cut off when the overlay is narrow
+        String who = wholeRun ? "" : "  ·  " + b.title + (live.active ? "" : b.killed ? " (dead)" : " (ended)");
+        if (mine == null) return "You haven't hit it" + who;
+        return String.format(java.util.Locale.ROOT, "%,.0f/s   #%d/%d   %.0f%%", mine.dps, rank, b.rows.size(), mine.percent) + who;
+    }
+
+    /** "3 to bring: Potion of Life, Pumpkin Treat" across your Tinker quests, or "ready to hand in". */
+    /** Quests you've pinned on the Tinker Quests tab (not hidden, not done), at most 4. */
+    private static List<packets.data.QuestData> pinnedQuests(Account a) {
+        List<packets.data.QuestData> out = new java.util.ArrayList<>();
+        if (a == null) return out;
+        String acc = a.me.accountId();
+        List<packets.data.QuestData> all = new java.util.ArrayList<>(a.me.quests());
+        all.sort(java.util.Comparator.comparingInt(AboutMe::questRank)); // daily ones first
+        for (packets.data.QuestData q : all) {
+            String key = acc + "/" + AboutMe.questKey(q);
+            if (q.completed || !AboutMe.Ticks.flag(key + "#pin") || AboutMe.Ticks.flag(key + "#hide")) continue;
+            out.add(q);
+            if (out.size() == 4) break;
+        }
+        return out;
+    }
+
+    /** "Potion of Life ×2, Pumpkin Treat" still to bring for one quest, or "Ready to hand in!". */
+    private static String questLeft(Account a, packets.data.QuestData q) {
+        if (q.requirements == null || q.requirements.length == 0) return "-";
+        java.util.Map<Integer, Integer> pool = new java.util.HashMap<>();
+        for (int id : a.me.carried()) pool.merge(id, 1, Integer::sum);
+        String key = a.me.accountId() + "/" + AboutMe.questKey(q);
+        java.util.Map<String, Integer> left = new java.util.LinkedHashMap<>();
+        for (int i = 0; i < q.requirements.length; i++) {
+            int id = q.requirements[i];
+            if (id <= 0) continue;
+            Integer n = pool.get(id);
+            if (n != null && n > 0) {
+                pool.put(id, n - 1);
+                continue;
+            }
+            if (AboutMe.Ticks.has(key, i)) continue;
+            String nm;
+            try {
+                nm = ItemInfo.of(id).name;
+            } catch (Throwable e) {
+                nm = "Item #" + id;
+            }
+            left.merge(nm, 1, Integer::sum);
+        }
+        if (left.isEmpty()) return "Ready to hand in!";
+        StringBuilder sb = new StringBuilder();
+        for (java.util.Map.Entry<String, Integer> e : left.entrySet()) {
+            if (sb.length() > 0) sb.append(", ");
+            sb.append(e.getKey()).append(e.getValue() > 1 ? " ×" + e.getValue() : "");
+        }
+        return sb.toString();
+    }
+
+    /** "12 found  ·  last: Doom Bow (Shiny), 3d ago" (worked out at most every 15 seconds). */
+    private String shinyText(Account a) {
+        long now = System.currentTimeMillis();
+        if (now - shinyAt < 15_000) return shinyText;
+        shinyAt = now;
+        int n = 0;
+        long last = 0;
+        String lastName = "";
+        try {
+            for (LootStats.Entry e : LootStats.all()) {
+                if (a != null && !a.isMine(e.account)) continue;
+                for (int id : e.items) {
+                    if (!LootBook.isShiny(id)) continue;
+                    n++;
+                    if (e.at >= last) {
+                        last = e.at;
+                        lastName = ItemInfo.of(id).name;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        shinyText = n == 0 ? "None yet" : String.format(java.util.Locale.ROOT, "%,d found  ·  last: %s, %s", n, lastName, agoDays(last * 1000));
+        return shinyText;
+    }
+
+    private static String agoDays(long at) {
+        long m = (System.currentTimeMillis() - at) / 60_000;
+        if (m < 60) return m < 1 ? "just now" : m + "m ago";
+        if (m < 60 * 24) return m / 60 + "h ago";
+        return m / 60 / 24 + "d ago";
+    }
+
+    /** "in 3h 12m" until the daily quests reset, "passed: see the Tinkerer" after, or null before quests are known. */
+    private static String resetText(Account a) {
+        if (a == null || a.me.questsAt() == 0) return null;
+        long left = AboutMe.dailyReset(a.me.questsAt()) - System.currentTimeMillis();
+        return left > 0 ? "in " + AboutMe.countdown(left) : "passed: see the Tinkerer";
+    }
+
+    private static String questsText(Account a) {
+        if (a == null) return "-";
+        List<packets.data.QuestData> quests = a.me.quests();
+        if (a.me.questsAt() == 0) return "Open the Tinkerer's quests once";
+        java.util.Map<Integer, Integer> pool = new java.util.HashMap<>();
+        for (int id : a.me.carried()) pool.merge(id, 1, Integer::sum);
+        List<String> missing = new java.util.ArrayList<>();
+        int open = 0, ready = 0;
+        // pinned quests only, if you've pinned any; hidden ones never
+        boolean anyPinned = false;
+        for (packets.data.QuestData q : quests) if (AboutMe.Ticks.flag(a.me.accountId() + "/" + AboutMe.questKey(q) + "#pin")) anyPinned = true;
+        for (packets.data.QuestData q : quests) {
+            if (q.completed || q.requirements == null) continue;
+            String key = a.me.accountId() + "/" + AboutMe.questKey(q);
+            if (AboutMe.Ticks.flag(key + "#hide")) continue;
+            if (anyPinned && !AboutMe.Ticks.flag(key + "#pin")) continue;
+            open++;
+            int left = 0;
+            for (int i = 0; i < q.requirements.length; i++) {
+                int id = q.requirements[i];
+                if (id <= 0) continue;
+                Integer n = pool.get(id);
+                if (n != null && n > 0) {
+                    pool.put(id, n - 1);
+                    continue;
+                }
+                if (AboutMe.Ticks.has(key, i)) continue;
+                left++;
+                String nm;
+                try {
+                    nm = ItemInfo.of(id).name;
+                } catch (Throwable e) {
+                    nm = "Item #" + id;
+                }
+                missing.add(nm);
+            }
+            if (left == 0) ready++;
+        }
+        if (open == 0) return "All done!";
+        if (missing.isEmpty()) return "Everything's ready to hand in!";
+        java.util.Map<String, Integer> counts = new java.util.LinkedHashMap<>();
+        for (String m : missing) counts.merge(m, 1, Integer::sum);
+        StringBuilder sb = new StringBuilder();
+        for (java.util.Map.Entry<String, Integer> e : counts.entrySet()) {
+            if (sb.length() > 0) sb.append(", ");
+            sb.append(e.getKey()).append(e.getValue() > 1 ? " ×" + e.getValue() : "");
+        }
+        return missing.size() + " to bring" + (ready > 0 ? " (" + ready + " ready)" : "") + ": " + sb;
+    }
+
+    /** "1,646 · 2,000 · 542" (green, red, purple): the dots are drawn with it. */
+    private String dustText(Account a) {
+        int[] d = null;
+        MeTracker.Thing c = a == null ? null : a.me.character();
+        if (c != null) {
+            String s = c.s(packets.data.enums.StatType.DUST_STAT);
+            if (!s.isEmpty()) {
+                d = new int[3];
+                for (String part : s.split(",")) {
+                    String[] kv = part.split(":");
+                    if (kv.length != 2) continue;
+                    try {
+                        int i = Integer.parseInt(kv[0].trim()), n = Integer.parseInt(kv[1].trim());
+                        if (i == 1) d[0] = n; // green
+                        else if (i == 5) d[1] = n; // red
+                        else if (i == 4) d[2] = n; // purple
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            }
+        }
+        dustNow = d;
+        return d == null ? "-" : "";
+    }
+
     private String runText() {
         Account a = current();
         String map = a == null ? null : a.visitMap();
@@ -285,9 +623,11 @@ final class MiniOverlay {
         String boost = "None active";
         if (a != null) {
             long now = System.currentTimeMillis();
-            String ld = a.me.lootDropEnds > now ? "Drop " + left(a.me.lootDropEnds) : "";
-            String lt = a.me.lootTierEnds > now ? "Tier " + left(a.me.lootTierEnds) : "";
-            if (!ld.isEmpty() || !lt.isEmpty()) boost = ld + (!ld.isEmpty() && !lt.isEmpty() ? "  ·  " : "") + lt;
+            long dl = a.me.lootDropLeft(), tl = a.me.lootTierLeft();
+            String ld = dl > 0 ? "Drop " + left(now + dl) : "";
+            String lt = tl > 0 ? "Tier " + left(now + tl) : "";
+            if (!ld.isEmpty() || !lt.isEmpty()) boost = ld + (!ld.isEmpty() && !lt.isEmpty() ? "  ·  " : "") + lt
+                    + (a.me.lootPaused() ? "  (paused here)" : "");
         }
         java.util.List<String[]> out = new java.util.ArrayList<>();
         for (String[] r : ROWS) {
@@ -300,6 +640,33 @@ final class MiniOverlay {
                 case "fame": v = fame; break;
                 case "bags": v = b.toString(); break;
                 case "boost": v = boost; break;
+                case "mods": {
+                    DungeonMods.Here h = a == null ? null : a.mods;
+                    v = h == null || h.isEmpty() ? "None here" : h.totalText() + "  (" + h.names() + ")";
+                    break;
+                }
+                case "dust": v = dustText(a); break;
+                case "shiny": v = shinyText(a); break;
+                case "quests": {
+                    List<packets.data.QuestData> pinned = pinnedQuests(a);
+                    String reset = resetText(a);
+                    if (pinned.isEmpty()) {
+                        out.add(new String[]{r[1], questsText(a)});
+                        if (reset != null) out.add(new String[]{"Daily reset", reset});
+                        continue;
+                    }
+                    // each pinned quest on its own line: its name, then what's left to bring
+                    for (packets.data.QuestData q : pinned) {
+                        String n = q.name == null || q.name.isEmpty() ? "Quest" : q.name;
+                        out.add(new String[]{n, questLeft(a, q)});
+                    }
+                    if (reset != null) out.add(new String[]{"Daily reset", reset});
+                    continue;
+                }
+                case "dps":
+                    for (String[] line : topThree(a)) out.add(line);
+                    continue;
+                case "rundps": v = dpsText(a, true); break;
                 default: v = nextBadge.isEmpty() ? "-" : nextBadge;
             }
             out.add(new String[]{r[1], v});
@@ -474,7 +841,7 @@ final class MiniOverlay {
         flashBox.addActionListener(x -> {
             flash = flashBox.isSelected();
             settings.set("overlay.flash", String.valueOf(flash));
-            if (flash) startFlash(); // a preview
+            if (flash) startFlash(Pixel.PINK); // a preview
         });
         Pixel.Check dungeons = new Pixel.Check("Only in dungeons", onlyDungeons);
         dungeons.addActionListener(x -> setOnlyDungeons(dungeons.isSelected()));
@@ -490,7 +857,9 @@ final class MiniOverlay {
             settings.set("overlay.small", String.valueOf(small));
             applySize();
         });
-        for (Pixel.Check c : new Pixel.Check[]{flashBox, dungeons, seeBox, fold}) card.add(menuItem(c));
+        Pixel.Check dpsBox = new Pixel.Check("My name, damage and DPS when folded", foldedDps);
+        dpsBox.addActionListener(x -> setFoldedDps(dpsBox.isSelected()));
+        for (Pixel.Check c : new Pixel.Check[]{flashBox, dungeons, seeBox, fold, dpsBox}) card.add(menuItem(c));
         card.add(menuDivider());
         card.add(menuAction("Normal size", () -> {
             scale = 1;
@@ -631,12 +1000,13 @@ final class MiniOverlay {
             if (glow > 0) {
                 // a soft white-bag glow inside the edge
                 for (int k = 6; k >= 1; k--) {
-                    g.setColor(new Color(Pixel.PINK.getRed(), Pixel.PINK.getGreen(), Pixel.PINK.getBlue(), (int) (glow * 48 * (7 - k) / 6.0)));
+                    Color fc = flashColour;
+                    g.setColor(new Color(fc.getRed(), fc.getGreen(), fc.getBlue(), (int) (glow * 48 * (7 - k) / 6.0)));
                     g.setStroke(new BasicStroke(k * 2.2f));
                     g.draw(card);
                 }
             }
-            g.setColor(glow > 0 ? Cute.mix(Pixel.LINE, Pixel.PINK, glow) : Pixel.LINE);
+            g.setColor(glow > 0 ? Cute.mix(Pixel.LINE, flashColour, glow) : Pixel.LINE);
             g.setStroke(new BasicStroke(2f + (float) (glow * 1.5)));
             g.draw(card);
             if (pup == null) pup = PixelPup.frame(PixelPup.Face.HAPPY, PixelPup.Ears.UP, PixelPup.Tail.UP,
@@ -650,14 +1020,36 @@ final class MiniOverlay {
             int tx = small ? 44 : 62;
             g.setColor(Pixel.INK);
             g.setFont(Cute.font(Font.BOLD, 15));
-            g.drawString("White Bag Puppy", tx, 28);
+            // folded with your numbers on: the zone and timer take the title line, so nothing gets squeezed out
+            boolean folded = small || shownRows.isEmpty();
+            boolean zoneTitle = folded && foldedDps && watching.getAsBoolean() && current() != null && current().visitMap() != null;
+            String title = zoneTitle ? runText() : "White Bag Puppy";
+            {
+                FontMetrics tfm = g.getFontMetrics();
+                String t = title;
+                while (tfm.stringWidth(t) > w - tx - 70 && t.length() > 6) t = t.substring(0, t.length() - 2);
+                g.drawString(t.equals(title) ? title : t + "…", tx, 28);
+            }
             boolean awake = watching.getAsBoolean();
             g.setColor(awake ? Pixel.TEAL : Theme.c(0xC9BFD6));
             g.fillOval(tx, 38, 8, 8);
             g.setColor(Theme.c(0x8A7F99));
             g.setFont(Cute.font(Font.PLAIN, 11));
-            String sub = !awake ? "asleep: press Start watching" : small || shownRows.isEmpty() ? runText() : "watching" + (onlyDungeons ? "  ·  only in dungeons" : "");
-            g.drawString(sub, tx + 13, 46);
+            String mine = foldedDps ? myDps() : "";
+            if (mine.endsWith("  ·  ")) mine = mine.substring(0, mine.length() - 5);
+            boolean danger = System.currentTimeMillis() < dangerUntil && !dangerText.isEmpty();
+            if (danger) {
+                g.setColor(new Color(0xD8342E));
+                g.setFont(Cute.font(Font.BOLD, 11));
+            }
+            String sub = danger ? dangerText : !awake ? "asleep: press Start watching" : folded ? (zoneTitle ? (mine.isEmpty() ? "watching" : mine) : runText()) : "watching" + (onlyDungeons ? "  ·  only in dungeons" : "");
+            {
+                FontMetrics sfm = g.getFontMetrics();
+                int room = w - (tx + 13) - 70; // stop before the – and × buttons
+                String cut = sub;
+                while (sfm.stringWidth(cut) > room && cut.length() > 6) cut = cut.substring(0, cut.length() - 2);
+                g.drawString(cut.equals(sub) ? sub : cut + "…", tx + 13, 46);
+            }
             g.setFont(Cute.font(Font.BOLD, 15));
             g.drawString("–", w - 56, 28);
             g.drawString("×", w - 32, 28);
@@ -668,13 +1060,41 @@ final class MiniOverlay {
                 for (String[] r : rows()) {
                     g.setFont(Cute.font(Font.PLAIN, 12));
                     g.setColor(Theme.c(0x8A7F99));
-                    g.drawString(r[0], 16, y);
+                    {
+                        FontMetrics lfm = g.getFontMetrics();
+                        String lab = r[0];
+                        while (lfm.stringWidth(lab) > 102 && lab.length() > 4) lab = lab.substring(0, lab.length() - 2);
+                        g.drawString(lab.equals(r[0]) ? lab : lab + "…", 16, y);
+                    }
                     g.setFont(Cute.font(Font.BOLD, 12));
                     g.setColor(r[0].equals("Last white") && !lastWhite.isEmpty() ? Pixel.PINK_INK : Pixel.INK);
-                    String v = r[1];
+                    int[] dust = dustNow;
+                    if (r[0].equals("Dust") && dust != null) {
+                        // three coloured dots, each with its amount
+                        FontMetrics fm = g.getFontMetrics();
+                        int dx = 124;
+                        Color[] dots = {new Color(0x4CC46A), new Color(0xE0483E), new Color(0x9B5CFF)};
+                        for (int k = 0; k < 3; k++) {
+                            g.setColor(dots[k]);
+                            g.fill(new java.awt.geom.Ellipse2D.Double(dx, y - 9, 8, 8));
+                            dx += 12;
+                            g.setColor(Pixel.INK);
+                            String n = String.format(java.util.Locale.ROOT, "%,d", dust[k]);
+                            g.drawString(n, dx, y);
+                            dx += fm.stringWidth(n) + 14;
+                        }
+                        y += 25;
+                        continue;
+                    }
+                    String full = r[1];
+                    if (full.startsWith(YOU_MARK)) {
+                        full = full.substring(1);
+                        g.setColor(Pixel.PINK_INK);
+                    }
+                    String v = full;
                     FontMetrics fm = g.getFontMetrics();
                     while (fm.stringWidth(v) > w - 140 && v.length() > 6) v = v.substring(0, v.length() - 2);
-                    g.drawString(v.equals(r[1]) ? v : v + "…", 124, y);
+                    g.drawString(v.equals(full) ? v : v + "…", 124, y);
                     y += 25;
                 }
             }

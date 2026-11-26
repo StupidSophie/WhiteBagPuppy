@@ -22,6 +22,24 @@ final class ClassMax {
 
     private static final String[] TAGS = {"MaxHitPoints", "MaxMagicPoints", "Attack", "Defense", "Speed", "Dexterity", "HpRegen", "MpRegen"};
     private static volatile Map<Integer, int[]> table;
+    /** Each class's 4 equipment slot types (weapon, ability, armor, ring), from SlotTypes. */
+    private static final Map<Integer, int[]> slotTable = new HashMap<>();
+
+    /** The slot types a class can equip (weapon, ability, armor, ring), or null if unknown. */
+    static int[] slots(int classType) {
+        if (table == null) load();
+        synchronized (slotTable) {
+            return slotTable.get(classType);
+        }
+    }
+
+    /** True if this class can wear an item of this slot type (true when either isn't known). */
+    static boolean canEquip(int classType, int itemSlotType) {
+        int[] s = slots(classType);
+        if (s == null || itemSlotType <= 0) return true;
+        for (int x : s) if (x == itemSlotType) return true;
+        return false;
+    }
 
     /** Max stats for a class object type, or null if unknown (e.g. game files not extracted yet). */
     static int[] of(int classType) {
@@ -81,6 +99,20 @@ final class ClassMax {
                     }
                 }
                 out.put(type, max);
+                String st = childText(o, "SlotTypes");
+                if (st != null) {
+                    String[] parts = st.split(",");
+                    if (parts.length >= 4) {
+                        int[] s = new int[4];
+                        try {
+                            for (int k = 0; k < 4; k++) s[k] = Integer.parseInt(parts[k].trim());
+                            synchronized (slotTable) {
+                                slotTable.put(type, s);
+                            }
+                        } catch (NumberFormatException ignored) {
+                        }
+                    }
+                }
             }
         } catch (Exception ignored) {
         }

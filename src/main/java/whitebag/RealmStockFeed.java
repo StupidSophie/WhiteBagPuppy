@@ -37,6 +37,9 @@ final class RealmStockFeed {
     static final String EVENT_TYPES_URL = System.getProperty("realmstock.eventTypes", "https://realm.wiki/RealmStock/EventTypes");
     static final String DUNGEON_TYPES_URL = System.getProperty("realmstock.dungeonTypes", "https://realm.wiki/RealmStock/DungeonTypes");
     static final String PAGE_URL = "https://realmstock.com/pages/event-notifier";
+    /** atti.network's Encounters list: realm events (no key pops), used when RealmStock is down or picked instead. */
+    static final String ATTI_EVENTS_URL = System.getProperty("atti.events", "https://atti.network/events.json");
+    static final String ATTI_PAGE_URL = "https://atti.network/encounters";
     private static final long POLL_MS = Long.getLong("realmstock.pollMs", 15_000L);
     /** Type 3 with the "closed" flag is a realm closing. */
     private static final int REALM_CLOSED_TYPE = 3;
@@ -51,6 +54,10 @@ final class RealmStockFeed {
         String realm, server;
         int players = -1, eventsLeft = -1, score = -1, tier;
         long atMs;
+        /** "Wave 2" for atti's AI waves, else "". */
+        String extra = "";
+        /** "RealmStock" or "atti". */
+        String source = "RealmStock";
 
         String region() {
             return regionOf(server);
@@ -116,6 +123,19 @@ final class RealmStockFeed {
     }
 
     /** Show only what you're watching (ticked events, key pops and closings), or everything. */
+    /** "auto" (RealmStock, atti.network when RealmStock is down), "realmstock" or "atti". */
+    static String source() {
+        return EventTracker.setting("realmstock.source", "auto");
+    }
+
+    static void setSource(String s) {
+        EventTracker.setSetting("realmstock.source", s);
+        changed();
+    }
+
+    /** Where the last good list came from: "RealmStock" or "atti.network". */
+    static volatile String liveFrom = "";
+
     static boolean showAll() {
         return Boolean.parseBoolean(EventTracker.setting("realmstock.showAll", "false"));
     }
@@ -147,6 +167,35 @@ final class RealmStockFeed {
         return out;
     }
 
+    /** Fills the event list from the copy in the jar (no internet) if it hasn't loaded yet; for the Realms tab. */
+    static void ensureEventNames() {
+        synchronized (RealmStockFeed.class) {
+            if (!eventTypes.isEmpty()) return;
+        }
+        String text = null;
+        try {
+            text = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get("realmstock-event-types.txt")), StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            try (InputStream in = RealmStockFeed.class.getResourceAsStream("realmstock-event-types.txt")) {
+                if (in != null) text = read(in);
+            } catch (Exception ignored) {
+            }
+        }
+        if (text == null) return;
+        Map<Integer, String> m = new HashMap<>();
+        for (String line : text.split("\n")) {
+            String[] f = line.trim().split("\\|");
+            if (f.length < 2) continue;
+            try {
+                m.put(Integer.parseInt(f[0].trim()), f[f.length - 1].trim());
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        synchronized (RealmStockFeed.class) {
+            if (eventTypes.isEmpty()) eventTypes.putAll(m);
+        }
+    }
+
     /** Every realm event on RealmStock's list, tidied and sorted. */
     static synchronized List<String> eventNames() {
         java.util.TreeSet<String> names = new java.util.TreeSet<>(String.CASE_INSENSITIVE_ORDER);
@@ -154,6 +203,7 @@ final class RealmStockFeed {
             String t = tidy(n);
             if (!t.isEmpty()) names.add(t);
         }
+        names.addAll(attiNames);
         return new ArrayList<>(names);
     }
 
@@ -263,17 +313,41 @@ final class RealmStockFeed {
         loadTypes();
         while (enabled()) {
             try {
-                String body = get(FEED_URL);
-                JsonObject o = JsonParser.parseString(body).getAsJsonObject();
-                if (o.has("success") && !o.get("success").getAsBoolean()) throw new Exception("the feed said it couldn't send events");
-                List<Event> fresh = parse(o.get("value").getAsString(), System.currentTimeMillis());
-                accept(fresh);
-                lastOk = System.currentTimeMillis();
-                status = "Live";
+                String src = source();
+                Exception rsFailed = null;
+                if (!src.equals("atti")) {
+                    try {
+                        String body = get(FEED_URL);
+                        JsonObject o = JsonParser.parseString(body).getAsJsonObject();
+                        if (o.has("success") && !o.get("success").getAsBoolean()) throw new Exception("the feed said it couldn't send events");
+                        List<Event> fresh = parse(o.get("value").getAsString(), System.currentTimeMillis());
+                        if (fresh.isEmpty()) throw new Exception("the feed was empty");
+                        accept(fresh);
+                        lastOk = System.currentTimeMillis();
+                        liveFrom = "RealmStock";
+                        status = "Live";
+                    } catch (Exception e) {
+                        rsFailed = e;
+                        System.out.println("RealmStock feed: " + e);
+                    }
+                }
+                if (src.equals("atti") || (src.equals("auto") && rsFailed != null)) {
+                    try {
+                        accept(parseAtti(AttiFeed.get(ATTI_EVENTS_URL, true)));
+                        lastOk = System.currentTimeMillis();
+                        liveFrom = "atti.network";
+                        status = "Live";
+                    } catch (Exception e) {
+                        System.out.println("atti events: " + e);
+                        status = (rsFailed != null ? "Can't reach RealmStock or atti.network right now" : "Can't reach atti.network right now")
+                                + " (" + e.getClass().getSimpleName() + (e.getMessage() == null ? "" : ": " + e.getMessage()) + "). Trying again shortly.";
+                    }
+                } else if (rsFailed != null) {
+                    status = "Can't reach RealmStock right now (" + rsFailed.getClass().getSimpleName()
+                            + (rsFailed.getMessage() == null ? "" : ": " + rsFailed.getMessage()) + "). Trying again shortly.";
+                }
             } catch (Exception e) {
-                status = "Can't reach RealmStock right now (" + e.getClass().getSimpleName()
-                        + (e.getMessage() == null ? "" : ": " + e.getMessage()) + "). Trying again shortly.";
-                System.out.println("RealmStock feed: " + e);
+                status = "Something went wrong reading the events (" + e + "). Trying again shortly.";
             }
             changed();
             try {
@@ -290,7 +364,10 @@ final class RealmStockFeed {
         List<Event> pings = new ArrayList<>();
         for (Event e : fresh) {
             events.put(e.id, e); // later polls update players / score
-            if (seen.add(e.id) && firstPollDone && shouldPing(e)) pings.add(e);
+            // the same event from the other site (after switching or falling back) doesn't ping twice
+            String same = e.kind + "|" + e.name + "|" + e.extra + "|" + e.realm + "|" + e.server + "|" + (e.atMs / 600_000L);
+            boolean firstTime = seen.add(e.id) & seen.add(same);
+            if (firstTime && firstPollDone && shouldPing(e)) pings.add(e);
         }
         // keep the last ~1500 events
         while (events.size() > 1500) {
@@ -365,6 +442,58 @@ final class RealmStockFeed {
         }
         return out;
     }
+
+    private static final java.util.regex.Pattern WAVE = java.util.regex.Pattern.compile("(?i)^(.*?)\\s*-\\s*(Wave\\s*\\d+)\\s*$");
+
+    /** atti.network's events.json: {"events":[{"id","server","realm","event","players","percent","closed","date_unix"}...]}. */
+    static List<Event> parseAtti(String body) {
+        List<Event> out = new ArrayList<>();
+        JsonObject o = JsonParser.parseString(body).getAsJsonObject();
+        if (!o.has("events")) return out;
+        for (com.google.gson.JsonElement el : o.getAsJsonArray("events")) {
+            try {
+                JsonObject j = el.getAsJsonObject();
+                Event e = new Event();
+                e.source = "atti";
+                e.id = "atti:" + str(j, "id");
+                e.server = str(j, "server");
+                e.realm = str(j, "realm");
+                e.players = j.has("players") && !j.get("players").isJsonNull() ? j.get("players").getAsInt() : -1;
+                e.score = j.has("percent") && !j.get("percent").isJsonNull() ? (int) Math.round(j.get("percent").getAsDouble()) : -1;
+                long unix = j.has("date_unix") && !j.get("date_unix").isJsonNull() ? j.get("date_unix").getAsLong() : 0;
+                e.atMs = unix > 0 ? unix * 1000L : System.currentTimeMillis();
+                String name = str(j, "event");
+                if (name.isEmpty()) continue;
+                if (name.equalsIgnoreCase("Oryx Closed Realm")) {
+                    e.kind = Kind.REALM_CLOSED;
+                    e.name = "Realm closed";
+                } else {
+                    java.util.regex.Matcher m = WAVE.matcher(name);
+                    if (m.matches()) {
+                        name = m.group(1).trim();
+                        e.extra = m.group(2).replaceAll("\\s+", " ");
+                    }
+                    e.kind = Kind.EVENT;
+                    e.name = tidy(name);
+                    synchronized (RealmStockFeed.class) {
+                        attiNames.add(e.name);
+                    }
+                }
+                if (e.id.equals("atti:")) e.id = "atti:" + e.name + "|" + e.realm + "|" + e.server + "|" + unix;
+                out.add(e);
+            } catch (Exception ignored) {
+                // one odd entry doesn't stop the rest
+            }
+        }
+        return out;
+    }
+
+    private static String str(JsonObject j, String k) {
+        return j.has(k) && !j.get(k).isJsonNull() ? j.get(k).getAsString().trim() : "";
+    }
+
+    /** Event names seen on atti.network, added to the tick list. */
+    private static final Set<String> attiNames = new HashSet<>();
 
     private static int num(String s) {
         try {
@@ -491,7 +620,7 @@ final class RealmStockFeed {
             case REALM_CLOSED:
                 return "Realm closed: " + e.realm;
             default:
-                return e.name;
+                return e.name + (e.extra.isEmpty() ? "" : " (" + e.extra + ")");
         }
     }
 

@@ -75,12 +75,31 @@ public class MeTracker {
 
     private final Listener listener;
     private int myId = -1;
+    /** Items in your slots going up in rarity where they sit (for the UPE contest). */
+    final UpgradeWatch upgrades = new UpgradeWatch();
+    volatile java.util.function.Consumer<UpgradeWatch.Upgrade> onUpgrade = u -> { };
+    private final java.util.List<UpgradeWatch.Upgrade> pendingUpgrades = new java.util.ArrayList<>();
     private Thing me;
     private final Map<Integer, Thing> others = new HashMap<>(); // objects that might be your pet
     private int activePetInstance = -1;
     private int charId = -1;
 
     /** The character you're playing (the game's id for it), or -1 before you've loaded in. */
+    /** Your character's name, or "". */
+    /** Your guild's name, or "". */
+    synchronized String myGuild() {
+        return me == null ? "" : me.s(StatType.GUILD_NAME_STAT).trim();
+    }
+
+    synchronized String myName() {
+        return me == null ? "" : DpsTracker.cleanName(me.s(StatType.NAME_STAT));
+    }
+
+    /** Your class (object type), or -1. */
+    synchronized int myClassType() {
+        return me == null ? -1 : me.objectType;
+    }
+
     int charId() {
         return charId;
     }
@@ -96,6 +115,11 @@ public class MeTracker {
     private final Map<Integer, long[]> fameStart = new HashMap<>();
     private List<QuestData> quests = Collections.emptyList();
     private long questsAt = 0;
+
+    /** The name of the map you're on ("Undead Lair"), or "" before the first one. */
+    String mapTitle() {
+        return mapTitle;
+    }
 
     public MeTracker(Listener listener) {
         this.listener = listener;
@@ -113,6 +137,10 @@ public class MeTracker {
             packets.incoming.MapInfoPacket m = (packets.incoming.MapInfoPacket) p;
             mapName = m.displayName;
             mapTitle = BagTracker.cleanName(m.name, m.displayName);
+            synchronized (this) {
+                rollLoot(System.currentTimeMillis());
+                lootPaused = lootSafe(mapTitle) || lootSafe(m.name);
+            }
             newVisit();
         });
         bus.register(PacketType.EXALTATION_BONUS_CHANGED, this::onExalt);
@@ -180,11 +208,51 @@ public class MeTracker {
     }
 
     public synchronized List<QuestData> quests() {
+        loadQuests();
         return new ArrayList<>(quests);
     }
 
     public synchronized long questsAt() {
+        loadQuests();
         return questsAt;
+    }
+
+    // ---------------------------------------------------------------- tinker quests kept between sessions
+
+    private static final String QUEST_FILE = "tinker-quests.txt";
+    private String questsLoadedFor = null;
+
+    /** The quests the Tinkerer last gave this account (saved in tinker-quests.txt), until the game sends new ones. */
+    private void loadQuests() {
+        String acc = accountId;
+        if (acc.isEmpty() || acc.equals(questsLoadedFor) || questsAt > 0) return;
+        questsLoadedFor = acc;
+        try {
+            for (String l : java.nio.file.Files.readAllLines(java.nio.file.Paths.get(QUEST_FILE), java.nio.charset.StandardCharsets.UTF_8)) {
+                String[] f = l.split("\t", 3);
+                if (f.length < 3 || !f[0].equals(acc)) continue;
+                QuestData[] saved = new com.google.gson.Gson().fromJson(f[2], QuestData[].class);
+                quests = saved == null ? Collections.emptyList() : new ArrayList<>(java.util.Arrays.asList(saved));
+                questsAt = Long.parseLong(f[1]);
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void saveQuests(String acc, long at, List<QuestData> list) {
+        if (acc == null || acc.isEmpty()) return;
+        List<String> lines = new ArrayList<>();
+        try {
+            for (String l : java.nio.file.Files.readAllLines(java.nio.file.Paths.get(QUEST_FILE), java.nio.charset.StandardCharsets.UTF_8)) {
+                if (!l.startsWith(acc + "\t")) lines.add(l);
+            }
+        } catch (Exception ignored) {
+        }
+        lines.add(acc + "\t" + at + "\t" + new com.google.gson.Gson().toJson(list.toArray(new QuestData[0])));
+        try {
+            java.nio.file.Files.write(java.nio.file.Paths.get(QUEST_FILE), lines, java.nio.charset.StandardCharsets.UTF_8);
+        } catch (Exception ignored) {
+        }
     }
 
     /** Item ids currently in your inventory and backpack (not equipped gear). */
@@ -208,17 +276,61 @@ public class MeTracker {
     volatile java.util.function.BiConsumer<Integer, String> onCharacterStats;
     /** The game's stats string for this character from the last time you loaded in (shots, kills, quests...), and when. */
     volatile String pcStats;
-    /** When your loot drop and loot tier boosts run out (ms), or 0 when you have none. */
-    volatile long lootDropEnds, lootTierEnds;
+    /**
+     * Your loot drop and loot tier boosts: the time left (ms) when last worked out, and when that was. Like in game,
+     * they only count down outside safe places: in the Nexus, your vault, the pet yard, guild hall, quest room and
+     * so on, they're paused.
+     */
+    private long lootDropLeft, lootTierLeft, lootAt;
+    private boolean lootPaused;
 
-    /** The game sends the boosts' seconds left now and then: turn them into end times. */
+    /** The game sends the boosts' seconds left now and then. */
     private void noteLootTimers(ObjectStatusData s) {
         if (s.stats == null) return;
         long now = System.currentTimeMillis();
-        for (StatData d : s.stats) {
-            if (d.statType == StatType.LD_TIMER_STAT) lootDropEnds = d.statValue > 0 ? now + d.statValue * 1000L : 0;
-            else if (d.statType == StatType.LT_TIMER_STAT) lootTierEnds = d.statValue > 0 ? now + d.statValue * 1000L : 0;
+        synchronized (this) {
+            boolean any = false;
+            for (StatData d : s.stats) {
+                if (d.statType == StatType.LD_TIMER_STAT || d.statType == StatType.LT_TIMER_STAT) any = true;
+            }
+            if (!any) return;
+            rollLoot(now); // keep the other boost's count-down right
+            for (StatData d : s.stats) {
+                if (d.statType == StatType.LD_TIMER_STAT) lootDropLeft = Math.max(0, d.statValue) * 1000L;
+                else if (d.statType == StatType.LT_TIMER_STAT) lootTierLeft = Math.max(0, d.statValue) * 1000L;
+            }
+            lootAt = now;
         }
+    }
+
+    /** Counts the boosts down to now (unless paused). */
+    private synchronized void rollLoot(long now) {
+        if (lootAt > 0 && !lootPaused) {
+            long gone = Math.max(0, now - lootAt);
+            lootDropLeft = Math.max(0, lootDropLeft - gone);
+            lootTierLeft = Math.max(0, lootTierLeft - gone);
+        }
+        lootAt = now;
+    }
+
+    /** True in places where the boosts don't count down. */
+    static boolean lootSafe(String map) {
+        return map != null && !map.isEmpty() && (RunLog.isHub(map) || RunLog.isVault(map));
+    }
+
+    /** Loot drop boost time left (ms), 0 when none. */
+    synchronized long lootDropLeft() {
+        return lootPaused || lootAt == 0 ? lootDropLeft : Math.max(0, lootDropLeft - (System.currentTimeMillis() - lootAt));
+    }
+
+    /** Loot tier boost time left (ms), 0 when none. */
+    synchronized long lootTierLeft() {
+        return lootPaused || lootAt == 0 ? lootTierLeft : Math.max(0, lootTierLeft - (System.currentTimeMillis() - lootAt));
+    }
+
+    /** True while the boosts are paused (you're somewhere safe). */
+    synchronized boolean lootPaused() {
+        return lootPaused;
     }
     volatile long pcStatsAt;
 
@@ -226,6 +338,7 @@ public class MeTracker {
         synchronized (this) {
             myId = ((CreateSuccessPacket) packet).objectId;
             charId = ((CreateSuccessPacket) packet).charId;
+            upgrades.character(charId);
             String st = ((CreateSuccessPacket) packet).str;
             pcStats = st == null || st.isEmpty() ? null : st;
             pcStatsAt = System.currentTimeMillis();
@@ -432,6 +545,8 @@ public class MeTracker {
             if (p.quests != null) Collections.addAll(list, p.quests);
             quests = list;
             questsAt = System.currentTimeMillis();
+            questsLoadedFor = accountId;
+            saveQuests(accountId, questsAt, list);
         }
         fire();
     }
@@ -447,6 +562,7 @@ public class MeTracker {
                         if (me == null) me = new Thing();
                         me.objectType = o.objectType;
                         apply(me, o.status);
+                        pendingUpgrades.addAll(upgrades.update(o.status.stats));
                         noteLootTimers(o.status);
                         noteFame();
                         changed = true;
@@ -463,6 +579,23 @@ public class MeTracker {
             if (p.drops != null) for (int id : p.drops) if (others.remove(id) != null) changed = true;
         }
         if (changed) fire();
+        firePendingUpgrades();
+    }
+
+    private void firePendingUpgrades() {
+        java.util.List<UpgradeWatch.Upgrade> ups;
+        synchronized (this) {
+            if (pendingUpgrades.isEmpty()) return;
+            ups = new java.util.ArrayList<>(pendingUpgrades);
+            pendingUpgrades.clear();
+        }
+        for (UpgradeWatch.Upgrade u : ups) {
+            try {
+                onUpgrade.accept(u);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     private void onNewTick(Packet packet) {
@@ -475,6 +608,7 @@ public class MeTracker {
                 if (s == null || s.stats == null || s.stats.length == 0) continue;
                 if (s.objectId == myId && me != null) {
                     changed |= apply(me, s);
+                    pendingUpgrades.addAll(upgrades.update(s.stats));
                     noteLootTimers(s);
                     noteFame();
                 } else {
@@ -497,6 +631,7 @@ public class MeTracker {
             }
         }
         if (changed) fire();
+        firePendingUpgrades();
     }
 
     /** This account's id from the game ("" until your character has loaded once). */

@@ -24,12 +24,19 @@ final class AboutMe {
 
     static class Panel extends JPanel {
         private final MeTracker tracker;
+        /** The Tinker Quests tab: just the quests (About Me shows everything else). */
+        private final boolean questsOnly;
         private final LogTabs.WidthPanel list = new LogTabs.WidthPanel(null);
         private final Timer refresh;
 
         Panel(MeTracker tracker) {
+            this(tracker, false);
+        }
+
+        Panel(MeTracker tracker, boolean questsOnly) {
             super(new BorderLayout());
             this.tracker = tracker;
+            this.questsOnly = questsOnly;
             setOpaque(false);
             list.setLayout(new BoxLayout(list, BoxLayout.Y_AXIS));
             list.setBackground(Pixel.SHEET);
@@ -70,6 +77,7 @@ final class AboutMe {
             List<QuestData> quests = tracker.quests();
             List<Integer> carried = tracker.carried();
 
+            if (!questsOnly) {
             // ---- character
             list.add(heading("character", null));
             gap(10);
@@ -209,27 +217,99 @@ final class AboutMe {
                 }
             }
 
+            } // end of About Me
+            if (questsOnly) {
             // ---- tinker quests
-            gap(22);
             long at = tracker.questsAt();
-            list.add(heading("tinker quests", at == 0 ? null : "Updated " + new SimpleDateFormat("h:mm a", Locale.ROOT).format(new Date(at))));
+            boolean today = at > 0 && new SimpleDateFormat("yyyyMMdd", Locale.ROOT).format(new Date(at))
+                    .equals(new SimpleDateFormat("yyyyMMdd", Locale.ROOT).format(new Date()));
+            list.add(heading("tinker quests", at == 0 ? null : "Updated " + new SimpleDateFormat(today ? "h:mm a" : "d MMM, h:mm a", Locale.ROOT).format(new Date(at))));
             gap(10);
+            if (at > 0) {
+                // daily quests all reset together at midnight UTC
+                long reset = dailyReset(at), now = System.currentTimeMillis();
+                JLabel r = new JLabel();
+                r.setFont(Cute.font(Font.BOLD, 13));
+                if (now < reset) {
+                    r.setText("Daily quests reset in " + countdown(reset - now) + "  (" + new SimpleDateFormat("EEE h:mm a", Locale.ROOT).format(new Date(reset)) + " your time)");
+                    r.setForeground(Pixel.INK);
+                } else {
+                    r.setText("The daily reset has passed: open the Tinkerer's quest window for the new dailies.");
+                    r.setForeground(new Color(0xC0392B));
+                }
+                list.add(left(r));
+                gap(10);
+            }
             if (at == 0) {
-                list.add(note("Open the Tinkerer's quest window in game and your quests show up here. "
-                        + "The game only sends them when you open that window."));
+                list.add(note("Talk to the Tinkerer in the Daily Quest Room and open his quest window: your daily "
+                        + "and weekly quests show up here, with what to bring and the rewards. The game only sends them when you open "
+                        + "that window, and the puppy remembers them after that."));
             } else if (quests.isEmpty()) {
                 list.add(note("The Tinkerer has no quests for you right now."));
             } else {
-                boolean first = true;
-                for (QuestData q : quests) {
-                    if (!first) {
-                        gap(10);
-                        list.add(new Divider());
-                        gap(10);
-                    }
-                    first = false;
-                    addQuest(q, carried);
+                String acc = tracker.accountId();
+                // ready to hand in: everything carried or crossed off
+                int ready = 0;
+                for (QuestData q : quests) if (!q.completed && !Ticks.flag(acc + "/" + questKey(q) + "#hide") && questReady(q, carried, acc)) ready++;
+                if (ready > 0) {
+                    JLabel r = new JLabel(ready == 1 ? "1 quest is ready to hand in to the Tinkerer!" : ready + " quests are ready to hand in to the Tinkerer!");
+                    r.setFont(Cute.font(Font.BOLD, 13));
+                    r.setForeground(Pixel.TEAL);
+                    list.add(left(r));
+                    gap(10);
                 }
+                // grouped by kind ("Daily: Potions" -> Daily), hidden ones at the end
+                Map<String, List<QuestData>> groups = new java.util.LinkedHashMap<>();
+                List<QuestData> hidden = new ArrayList<>();
+                List<QuestData> sorted = new ArrayList<>(quests);
+                sorted.sort(java.util.Comparator.comparingInt(AboutMe::questRank)); // daily ones at the top, then weekly
+                for (QuestData q : sorted) {
+                    if (Ticks.flag(acc + "/" + questKey(q) + "#hide")) {
+                        hidden.add(q);
+                        continue;
+                    }
+                    groups.computeIfAbsent(questGroup(q), k -> new ArrayList<>()).add(q);
+                }
+                for (Map.Entry<String, List<QuestData>> g : groups.entrySet()) {
+                    gap(6);
+                    list.add(heading(g.getKey().toLowerCase(Locale.ROOT), String.valueOf(g.getValue().size())));
+                    gap(8);
+                    boolean first = true;
+                    for (QuestData q : g.getValue()) {
+                        if (!first) {
+                            gap(10);
+                            list.add(new Divider());
+                            gap(10);
+                        }
+                        first = false;
+                        addQuest(q, carried);
+                    }
+                    gap(10);
+                }
+                if (!hidden.isEmpty()) {
+                    gap(10);
+                    list.add(heading("hidden", String.valueOf(hidden.size())));
+                    gap(6);
+                    for (QuestData q : hidden) {
+                        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+                        row.setOpaque(false);
+                        JLabel n = new JLabel(q.name == null || q.name.isEmpty() ? "Quest" : q.name);
+                        n.setFont(Cute.font(Font.PLAIN, 13));
+                        n.setForeground(Pixel.INK);
+                        row.add(n);
+                        Pixel.Button show = new Pixel.Button("Show", false);
+                        String hk = acc + "/" + questKey(q) + "#hide";
+                        show.addActionListener(e -> {
+                            Ticks.setFlag(hk, false);
+                            rebuild();
+                        });
+                        row.add(show);
+                        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, row.getPreferredSize().height));
+                        list.add(left(row));
+                        gap(4);
+                    }
+                }
+            }
             }
             list.add(Box.createVerticalGlue());
             list.revalidate();
@@ -290,11 +370,38 @@ final class AboutMe {
 
         private void addQuest(QuestData q, List<Integer> carried) {
             String title = q.name == null || q.name.isEmpty() ? "Quest" : q.name;
-            JLabel name = new JLabel(title + (q.completed ? "   (done)" : ""));
+            String acc = tracker.accountId();
+            String qk = acc + "/" + questKey(q);
+            boolean ready = !q.completed && questReady(q, carried, acc);
+            JPanel head = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+            head.setOpaque(false);
+            head.setBorder(new EmptyBorder(0, -10, 0, 0)); // line the title up with the rest of the quest
+            JLabel name = new JLabel(title + (q.completed ? "   (done)" : ready ? "   (ready to hand in!)" : ""));
             name.setFont(Cute.font(Font.BOLD, 14));
-            name.setForeground(q.completed ? Pixel.TEAL : Pixel.INK);
-            left(name);
-            list.add(name);
+            name.setForeground(q.completed || ready ? Pixel.TEAL : Pixel.INK);
+            head.add(name);
+            boolean pinned = Ticks.flag(qk + "#pin");
+            Pixel.Button pin = new Pixel.Button(pinned ? "Unpin from overlay" : "Pin to overlay", false);
+            pin.setToolTipText("Pinned quests are the only ones the overlay's Tinker quests row counts");
+            pin.addActionListener(e -> {
+                Ticks.setFlag(qk + "#pin", !pinned);
+                rebuild();
+            });
+            Pixel.Button hide = new Pixel.Button("Hide", false);
+            hide.addActionListener(e -> {
+                Ticks.setFlag(qk + "#hide", true);
+                Ticks.setFlag(qk + "#pin", false);
+                rebuild();
+            });
+            head.add(pin);
+            head.add(hide);
+            head.setMaximumSize(new Dimension(Integer.MAX_VALUE, head.getPreferredSize().height));
+            list.add(left(head));
+            long ends = questEnds(q);
+            if (ends > 0 && questRank(q) > 1) {
+                gap(2);
+                list.add(small("Ends in " + countdown(ends - System.currentTimeMillis())));
+            }
             if (q.description != null && !q.description.trim().isEmpty()) {
                 gap(2);
                 list.add(wrap(q.description.trim()));
@@ -329,6 +436,21 @@ final class AboutMe {
                 list.add(strip);
                 gap(4);
                 list.add(wrap(names(req)));
+                // where to farm whatever's still missing
+                java.util.LinkedHashSet<Integer> missing = new java.util.LinkedHashSet<>();
+                for (int i = 0; i < req.size(); i++) if (!have[i] && !crossed[i]) missing.add(req.get(i));
+                if (!missing.isEmpty() && !q.completed) {
+                    gap(8);
+                    list.add(small("Where to farm it"));
+                    gap(3);
+                    for (int id : missing) {
+                        JLabel l = new JLabel("<html><b>" + esc(itemName(id)) + ":</b> " + esc(farmWhere(id)) + "</html>");
+                        l.setFont(Cute.font(Font.PLAIN, 12));
+                        l.setForeground(Pixel.INK);
+                        list.add(left(l));
+                        gap(2);
+                    }
+                }
             }
             List<Integer> rew = ids(q.rewards);
             if (!rew.isEmpty()) {
@@ -348,7 +470,136 @@ final class AboutMe {
 
     // ------------------------------------------------------------------ crossed-off boxes
 
-    private static String questKey(QuestData q) {
+    /**
+     * Which section of the Tinkerer's window a quest belongs to, in the order they're shown: dailies first. Worked out
+     * from the quest's category number, its rewards and its name (sections from RealmHound's quest panel, MIT).
+     */
+    private static final String[] QUEST_SECTIONS = {"Daily Quest Chests", "Daily Misc", "Weekly", "Permanent Account Rewards",
+            "Exchange", "Skin Exchange", "Other"};
+
+    static int questRank(QuestData q) {
+        String n = (q.name == null ? "" : q.name).toLowerCase(Locale.ROOT);
+        if (q.rewards != null) for (int id : q.rewards)
+            if (id > 0 && objectName(id, "").toLowerCase(Locale.ROOT).contains("quest chest")) return 0;
+        if (n.startsWith("daily") || n.contains("daily quest")) return 0;
+        if (n.contains("weekly") || n.contains("craftsmanship")) return 2;
+        int c = q.category;
+        if (c == 0) {
+            if (n.contains("eggs") || n.contains("scout") || n.contains("potion fusion") || n.contains("laundry")) return 1;
+            return 0;
+        }
+        if ((c >= 999 && c <= 1001) || (c >= 6999 && c <= 7000) || (c >= 7162 && c <= 7163))
+            return n.contains("ore refin") ? 4 : 3;
+        if ((c >= 7010 && c <= 7012) || c == 11000) return 4;
+        if (c == 9080 || (c >= 9095 && c <= 9097)) return 5;
+        return 6;
+    }
+
+    /** The section heading a quest goes under (see questRank). */
+    static String questGroup(QuestData q) {
+        return QUEST_SECTIONS[questRank(q)];
+    }
+
+    /** The first midnight UTC after the quests were fetched (ms): when the dailies reset. */
+    static long dailyReset(long fetchedMs) {
+        long day = 86_400_000L;
+        return (fetchedMs / day + 1) * day;
+    }
+
+    /** When a quest ends (ms), from the expiry the game sends, or 0 if it has none (or it's years away). */
+    static long questEnds(QuestData q) {
+        if (q.expiration == null || q.expiration.trim().isEmpty()) return 0;
+        long ms;
+        try {
+            ms = (long) (Double.parseDouble(q.expiration.trim()) * 1000);
+        } catch (NumberFormatException e) {
+            try {
+                ms = java.time.OffsetDateTime.parse(q.expiration.trim()).toInstant().toEpochMilli();
+            } catch (Exception e2) {
+                return 0;
+            }
+        }
+        long now = System.currentTimeMillis();
+        return ms <= now || ms - now > 366L * 86_400_000L ? 0 : ms;
+    }
+
+    /** "2d 4h", "3h 12m" or "8m". */
+    static String countdown(long ms) {
+        long s = Math.max(0, ms / 1000), d = s / 86400, h = s % 86400 / 3600, m = s % 3600 / 60;
+        if (d > 0) return d + "d " + h + "h";
+        if (h > 0) return h + "h " + m + "m";
+        return Math.max(1, m) + "m";
+    }
+
+    private static String itemName(int id) {
+        try {
+            return ItemInfo.of(id).name;
+        } catch (Throwable e) {
+            return "Item #" + id;
+        }
+    }
+
+    private static String esc(String s) {
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    }
+
+    /**
+     * Where an item drops: the dungeons from the loot book (UT and ST items), and where it's actually dropped for you
+     * (from your loot history, most often first).
+     */
+    static String farmWhere(int id) {
+        List<String> book = new ArrayList<>();
+        try {
+            LootBook.Item it = LootBook.byName(itemName(id));
+            if (it != null) for (String p : it.places) if (!book.contains(p)) book.add(p);
+        } catch (Throwable ignored) {
+        }
+        Map<String, Integer> mine = new java.util.LinkedHashMap<>();
+        try {
+            for (LootStats.Entry e : LootStats.all())
+                if (e.items.contains(id) && !e.map.isEmpty()) mine.merge(RunLog.label(e.map), 1, Integer::sum);
+        } catch (Throwable ignored) {
+        }
+        StringBuilder sb = new StringBuilder();
+        if (!book.isEmpty()) {
+            int show = Math.min(5, book.size());
+            sb.append(String.join(", ", book.subList(0, show)));
+            if (book.size() > show) sb.append(" and ").append(book.size() - show).append(" more");
+        }
+        if (!mine.isEmpty()) {
+            List<Map.Entry<String, Integer>> m = new ArrayList<>(mine.entrySet());
+            m.sort((a, b) -> b.getValue() - a.getValue());
+            StringBuilder y = new StringBuilder();
+            for (int i = 0; i < Math.min(3, m.size()); i++) {
+                if (y.length() > 0) y.append(", ");
+                y.append(m.get(i).getKey()).append(m.get(i).getValue() > 1 ? " ×" + m.get(i).getValue() : "");
+            }
+            sb.append(sb.length() > 0 ? "  ·  " : "").append("you've had it drop in ").append(y);
+        }
+        if (sb.length() == 0) sb.append("not a dungeon drop the puppy knows of (it may come from enemies anywhere, a shop or a chest)");
+        return sb.toString();
+    }
+
+    /** True when you're carrying (or have crossed off) everything this quest wants. */
+    static boolean questReady(QuestData q, List<Integer> carried, String account) {
+        if (q.requirements == null || q.requirements.length == 0) return false;
+        Map<Integer, Integer> pool = new HashMap<>();
+        for (int id : carried) pool.merge(id, 1, Integer::sum);
+        String key = account + "/" + questKey(q);
+        for (int i = 0; i < q.requirements.length; i++) {
+            int id = q.requirements[i];
+            if (id <= 0) continue;
+            Integer n = pool.get(id);
+            if (n != null && n > 0) {
+                pool.put(id, n - 1);
+                continue;
+            }
+            if (!Ticks.has(key, i)) return false;
+        }
+        return true;
+    }
+
+    static String questKey(QuestData q) {
         String id = q.id != null && !q.id.isEmpty() ? q.id : q.name;
         return id == null ? "quest" : id.replace('\n', ' ').replace('|', '/');
     }
@@ -370,6 +621,20 @@ final class AboutMe {
                 }
             }
             return set;
+        }
+
+        /** A yes/no note about a quest (hidden, pinned to the overlay), kept with the ticks. */
+        static synchronized boolean flag(String key) {
+            return set().contains(key);
+        }
+
+        static synchronized void setFlag(String key, boolean on) {
+            boolean changed = on ? set().add(key) : set().remove(key);
+            if (!changed) return;
+            try {
+                java.nio.file.Files.write(java.nio.file.Paths.get(FILE), set(), java.nio.charset.StandardCharsets.UTF_8);
+            } catch (Exception ignored) {
+            }
         }
 
         static synchronized boolean has(String quest, int index) {
@@ -868,16 +1133,6 @@ final class AboutMe {
                 boolean tinted = (special || en != Enchant.NONE) && !done;
                 Pixel.frame(g, x, 0, SLOT, SLOT, tinted ? Cute.mix(Theme.WHITE, edge, 0.14) : fill,
                         (special || en != Enchant.NONE) && !cross ? edge : Pixel.LINE, 2);
-                if (en != Enchant.NONE) {
-                    // one dot per enchantment slot, like the game's slot icon
-                    for (int k = 0; k < en.ordinal(); k++) {
-                        g.setColor(Theme.WHITE);
-                        g.fillRect(x + 3 + k * 7, SLOT - 9, 6, 6);
-                        g.setColor(en.color);
-                        g.fillRect(x + 4 + k * 7, SLOT - 8, 4, 4);
-                    }
-                }
-                if (tagged) rarityTag(g, x + 3, 3, item.rarity, item.rarityColor);
                 BufferedImage ic = icons.get(i);
                 if (ic != null) {
                     Composite old = g.getComposite();
@@ -890,6 +1145,17 @@ final class AboutMe {
                     g.setColor(Pixel.INK);
                     g.drawString(item.name.length() > 7 ? item.name.substring(0, 7) : item.name, x + 4, SLOT / 2 + 3);
                 }
+                // the tier tag and enchantment dots go on top of the picture, so it can't hide them
+                if (en != Enchant.NONE) {
+                    // one dot per enchantment slot, like the game's slot icon
+                    for (int k = 0; k < en.ordinal(); k++) {
+                        g.setColor(Theme.WHITE);
+                        g.fillRect(x + 3 + k * 7, SLOT - 9, 6, 6);
+                        g.setColor(en.color);
+                        g.fillRect(x + 4 + k * 7, SLOT - 8, 4, 4);
+                    }
+                }
+                if (tagged) rarityTag(g, x + 3, 3, item.rarity, item.rarityColor);
                 if (cross) {
                     // a thick pixel line through the box
                     g.setColor(Pixel.INK);

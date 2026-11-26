@@ -28,7 +28,13 @@ public class BagDrop {
     /** A picture of the game window when the bag dropped (JPEG), if screenshots are on. */
     volatile byte[] gameShot;
     /** Optional extra line for the post, e.g. the drought tracker's celebration. */
+    /** Who looted it (your class, object type) and which enemy dropped it, for Loot History. */
+    volatile int charClass = -1;
+    volatile int charId = -1;
+    volatile String enemy = "";
     volatile String note;
+    /** Extra lines under the note (Loot Puppy's contest points), or null. */
+    volatile String detail;
     /** Collection items in this bag you'd never looted before (names), worked out when the bag is logged. */
     volatile java.util.List<String> newToCollection = java.util.Collections.emptyList();
 
@@ -94,6 +100,18 @@ public class BagDrop {
         }
         extra.addAll(other.extra);
         extraEnchants.addAll(other.extraEnchants);
+    }
+
+    /** A copy with the same items, for a second post (the UPE contest's) with its own note. */
+    BagDrop copy() {
+        BagDrop c = new BagDrop(objectId, type, mapName, playerName);
+        System.arraycopy(slots, 0, c.slots, 0, SLOTS);
+        System.arraycopy(enchants, 0, c.enchants, 0, SLOTS);
+        c.extra.addAll(extra);
+        c.extraEnchants.addAll(extraEnchants);
+        c.x = x;
+        c.y = y;
+        return c;
     }
 
     public List<ItemInfo> items() {

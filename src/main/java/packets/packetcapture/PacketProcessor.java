@@ -138,7 +138,37 @@ public class PacketProcessor extends Thread implements PProcessor {
     @Override
     public void connectionClosed(int connectionId) {
         connections.remove(connectionId);
+        java.util.ArrayDeque<String> tr = trails.remove(connectionId);
+        java.util.function.BiConsumer<Integer, java.util.List<String>> h = onClosedTrail;
+        if (h != null && tr != null) {
+            try {
+                synchronized (tr) {
+                    h.accept(connectionId, new java.util.ArrayList<>(tr));
+                }
+            } catch (Exception ignored) {
+            }
+        }
         ConnectionRouter.closed(connectionId);
+    }
+
+    // ---------------------------------------------------------------- White Bag Puppy: death debugging
+
+    /** The last packet types on each connection: names and sizes only, never what's in them. */
+    private static final java.util.Map<Integer, java.util.ArrayDeque<String>> trails = new java.util.concurrent.ConcurrentHashMap<>();
+    /** Gets a connection's trail when it closes. */
+    public static volatile java.util.function.BiConsumer<Integer, java.util.List<String>> onClosedTrail;
+    /** A death message came in that couldn't be read properly. */
+    public static volatile Runnable onBadDeath;
+
+    private static void trail(String what) {
+        if (onClosedTrail == null) return;
+        // logins, reconnects and chat are left out entirely
+        if (what.startsWith("HELLO") || what.startsWith("RECONNECT") || what.contains("TEXT")) return;
+        java.util.ArrayDeque<String> tr = trails.computeIfAbsent(ConnectionRouter.current(), k -> new java.util.ArrayDeque<>());
+        synchronized (tr) {
+            tr.addLast(new java.text.SimpleDateFormat("HH:mm:ss.SSS").format(new java.util.Date()) + "  " + what);
+            while (tr.size() > 60) tr.removeFirst();
+        }
     }
 
     /**
@@ -164,9 +194,14 @@ public class PacketProcessor extends Thread implements PProcessor {
      * @param size size of the packet.
      * @param data Constructed packet data.
      */
+    /** White Bag Puppy: when the last game packet came in (0 = none yet), to notice when the game can't be seen. */
+    public static volatile long lastPacketAt;
+
     public void processPackets(int type, int size, ByteBuffer data) {
+        lastPacketAt = System.currentTimeMillis();
         if (!PacketType.containsKey(type)) {
             System.err.println("Unknown packet type:" + type + " Data:" + Arrays.toString(data.array()));
+            trail("unknown type " + type + " (" + size + " bytes)");
             return;
         }
         logger.addPacket(type, size);
@@ -174,14 +209,25 @@ public class PacketProcessor extends Thread implements PProcessor {
         packetType.setData(data.array());
         BufferReader pData = new BufferReader(data);
 
+        String name = String.valueOf(PacketType.byOrdinal(type));
         try {
             packetType.deserialize(pData);
             if (!pData.isBufferFullyParsed()) {
                 pData.printError(packetType);
+                trail(name + " " + size + " bytes, NOT fully read (" + pData.getIndex() + "/" + pData.size() + ")");
+            } else {
+                trail(name + " " + size + " bytes");
             }
         } catch (Exception e) {
             Util.printLogs("Buffer exploded: " + pData.getIndex() + "/" + pData.size());
             debugPackets(type, data.array());
+            trail(name + " " + size + " bytes, FAILED to read at " + pData.getIndex() + "/" + pData.size());
+            // a death message the game changed the shape of: what was read (who died) is still worth passing on
+            if (packetType instanceof packets.incoming.DeathPacket) {
+                Runnable w = onBadDeath;
+                if (w != null) w.run();
+                ConnectionRouter.emit(packetType);
+            }
             return;
         }
         ConnectionRouter.emit(packetType);

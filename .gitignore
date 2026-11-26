@@ -1,0 +1,42 @@
+# your own settings and logs (the webhook URL lives in whitebag-notifier.properties: never upload it)
+*.properties
+*-log.txt
+# (loot-log, runs-log, fame-log, dps-log, trade-log are all yours: keep them off GitHub)
+vault*.txt
+item-debug.txt
+names.txt
+boss-filter.txt
+puzzle-debug.txt
+puzzle-towers.txt
+badges.txt
+badge-events.txt
+collection-debug.txt
+pet-cache.txt
+realmstock-*.txt
+# game files the app extracts, sounds and pictures people add themselves
+assets/
+sounds/
+background.png
+# build output
+build/
+*.class
+# more of your own files: posts waiting for Biscuit (they hold your webhook / Biscuit link), backups (they hold your settings)
+outbox/
+backups/
+*-debug.txt
+*crash-report.txt
+character-items.txt
+close-calls.txt
+deaths.txt
+fame-dungeons.txt
+new-items.txt
+owned-items.txt
+quest-chests.txt
+tinker-quests.txt
+tinker-ticks.txt
+titles-worn.txt
+upe-contest.txt
+loot-puppy-contest.txt
+# what White Bag Puppy.exe installs next to the app
+runtime/
+installed.txt

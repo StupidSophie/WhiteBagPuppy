@@ -1,0 +1,23 @@
+#include <windows.h>
+1 ICON "pup.ico"
+1 RT_MANIFEST "wbp.manifest"
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION 2,30,41,0
+PRODUCTVERSION 2,30,41,0
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904b0"
+    BEGIN
+      VALUE "FileDescription", "White Bag Puppy"
+      VALUE "ProductName", "White Bag Puppy"
+      VALUE "FileVersion", "2.30.41"
+      VALUE "ProductVersion", "2.30.41"
+      VALUE "OriginalFilename", "White Bag Puppy.exe"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END

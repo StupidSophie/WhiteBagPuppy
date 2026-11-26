@@ -23,6 +23,8 @@ public class DiscordWebhook {
 
     private static final Pattern WEBHOOK_URL = Pattern.compile(
             "^https://(?:(?:ptb|canary)\\.)?discord(?:app)?\\.com/api(?:/v\\d+)?/webhooks/\\d+/[\\w-]+/?$");
+    /** A personal Biscuit link from /pup link: Biscuit posts for you, no webhook needed. */
+    private static final Pattern BISCUIT_LINK = Pattern.compile("^https?://[^\\s/?#]+/pup/post\\?code=[\\w-]+(?:&kind=\\w+)?$");
     private static final Pattern DISCORD_ID = Pattern.compile("^\\d{15,22}$");
 
     private final ExecutorService sender = Executors.newSingleThreadExecutor(r -> {
@@ -38,10 +40,36 @@ public class DiscordWebhook {
 
     public DiscordWebhook(Log log) {
         this.log = log;
+        Outbox.start(log); // posts kept from last time Biscuit was down
     }
 
+    /** Biscuit is restarting (or deploying): keep the post and send it when it's back. Not for test posts. */
+    private boolean holdForBiscuit(boolean biscuit, String url, String contentType, byte[] body, String what) {
+        if (!biscuit || what.startsWith("test")) return false;
+        Outbox.hold(url, contentType, body, what);
+        log.log("*holds it gently in mouth* Biscuit isn't answering right now (probably restarting), so I'm keeping the "
+                + what + " and will send it as soon as Biscuit is back.");
+        return true;
+    }
+
+    /** A Discord webhook, or a Biscuit link. */
     public static boolean isValidUrl(String url) {
+        return url != null && (WEBHOOK_URL.matcher(url.trim()).matches() || isBiscuitLink(url));
+    }
+
+    static boolean isDiscordWebhook(String url) {
         return url != null && WEBHOOK_URL.matcher(url.trim()).matches();
+    }
+
+    static boolean isBiscuitLink(String url) {
+        return url != null && BISCUIT_LINK.matcher(url.trim()).matches();
+    }
+
+    /** A Biscuit link says what it's sending (bags or badges) so Biscuit picks the channel; webhooks are unchanged. */
+    static String forKind(String url, String kind) {
+        if (!isBiscuitLink(url)) return url;
+        String u = url.trim().replaceFirst("&kind=\\w+$", "");
+        return u + "&kind=" + kind;
     }
 
     public static boolean isValidDiscordId(String id) {
@@ -108,7 +136,8 @@ public class DiscordWebhook {
         sender.submit(() -> post(url, json, files, "test message"));
     }
 
-    private static final String USERNAME = "White Bag Puppy";
+    /** The name posts are made under (Loot Puppy changes it). */
+    static volatile String USERNAME = "White Bag Puppy";
     private static final String PAW = "\uD83D\uDC3E";
     private static final String[] BARKS = {
             "*woof woof!* look what i fetched for you~ \uD83E\uDDB4",
@@ -127,6 +156,7 @@ public class DiscordWebhook {
         StringBuilder desc = new StringBuilder();
         desc.append(BARKS[(int) Math.floorMod(drop.droppedAt + drop.objectId, (long) BARKS.length)]).append("\n");
         if (drop.note != null) desc.append("**").append(drop.note).append("**\n");
+        if (drop.detail != null && !drop.detail.isEmpty()) desc.append(drop.detail).append("\n");
         if (drop.newToCollection != null && !drop.newToCollection.isEmpty()) {
             desc.append("\n\u2728 **NEW to your collection:** ").append(String.join(", ", drop.newToCollection)).append(" \u2728\n");
         }
@@ -186,8 +216,10 @@ public class DiscordWebhook {
         String boundary = "----WhiteBag" + Long.toHexString(System.nanoTime());
         byte[] body = files.isEmpty() ? json.getBytes(StandardCharsets.UTF_8) : multipart(boundary, json, files);
         String contentType = files.isEmpty() ? "application/json; charset=utf-8" : "multipart/form-data; boundary=" + boundary;
-        boolean discord = isValidUrl(url);
-        String who = discord ? "Discord" : "the bot (" + host(url) + ")";
+        boolean discord = isDiscordWebhook(url);
+        boolean biscuit = isBiscuitLink(url);
+        if (biscuit && !url.contains("&kind=")) url = forKind(url, "bags");
+        String who = discord ? "Discord" : biscuit ? "Biscuit" : "the bot (" + host(url) + ")";
         for (int attempt = 1; attempt <= TRIES; attempt++) {
             HttpURLConnection con = null;
             try {
@@ -212,7 +244,7 @@ public class DiscordWebhook {
                     throw writeError != null ? writeError : e;
                 }
                 if (code >= 200 && code < 300 && writeError == null) {
-                    log.log("*drops it at " + (discord ? "Discord's" : "the bot's") + " feet* sent the " + what + "! *proud tail wag*");
+                    log.log("*drops it at " + (discord ? "Discord's" : biscuit ? "Biscuit's" : "the bot's") + " feet* sent the " + what + "! *proud tail wag*");
                     return;
                 }
                 String response = readBody(code >= 400 ? con.getErrorStream() : con.getInputStream());
@@ -228,16 +260,19 @@ public class DiscordWebhook {
                     Thread.sleep(waitMs);
                     continue;
                 }
-                log.log("*whimper* couldn't send the " + what + ": " + who + " answered HTTP " + code
-                        + (response.isEmpty() ? "" : " (" + response + ")") + ". " + hint(discord, code, body.length));
+                if (code >= 500 && attempt == TRIES && holdForBiscuit(biscuit, url, contentType, body, what)) return;
+                if (!(biscuit && code >= 500)) // Biscuit restarting: quietly try again, then keep it
+                    log.log("*whimper* couldn't send the " + what + ": " + who + " answered HTTP " + code
+                            + (response.isEmpty() ? "" : " (" + response + ")") + ". " + (biscuit ? "" : hint(discord, code, body.length)));
                 if (code < 500 || attempt == TRIES) return;
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;
             } catch (Exception e) {
                 if (attempt == TRIES) {
+                    if (holdForBiscuit(biscuit, url, contentType, body, what)) return;
                     log.log("*whimper* couldn't send the " + what + " to " + who + ": " + e.getMessage() + ". "
-                            + hint(discord, -1, body.length));
+                            + (biscuit ? "Biscuit may be restarting: it'll work again in a minute." : hint(discord, -1, body.length)));
                     return;
                 }
             } finally {

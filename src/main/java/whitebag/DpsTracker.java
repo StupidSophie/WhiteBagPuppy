@@ -164,6 +164,15 @@ public class DpsTracker {
         public long guardHits, guardDmg;
         /** Damage this player took during the fight, and how many hits (-1 if unknown). */
         public long takenDmg = -1, takenHits = -1;
+        /** Weapon, ability, armour and ring (item ids, -1 empty), or null if never seen. */
+        public int[] gear;
+        /** When they died or left the map during this fight (0: they didn't), and which. */
+        public long goneMs;
+        public boolean died;
+        /** The class they're playing (object type), or -1. */
+        public int classType = -1;
+        /** The game's item data for each gear slot (enchantments), or null. */
+        public String[] gearData;
 
         Row(String name, boolean you, long damage, double percent, double dps) {
             this.name = name;
@@ -216,6 +225,14 @@ public class DpsTracker {
         final List<Long> hitTimes = new ArrayList<>();
         /** Other players' damage taken {time, amount}, from the damage numbers the server shows over them. */
         final Map<String, List<long[]>> takenBy = new HashMap<>();
+        /** What each player had equipped (last seen), by name ({@link #YOU} for you). */
+        final Map<String, int[]> gear = new HashMap<>();
+        /** Who died or left the map: name -> {time, 1 if died}. */
+        final Map<String, long[]> gone = new HashMap<>();
+        /** Each player's class (object type), by name. */
+        final Map<String, Integer> classes = new HashMap<>();
+        /** Each player's item data (enchantments) per gear slot, by name. */
+        final Map<String, String[]> gearData = new HashMap<>();
 
         long[] takenBy(String who, long from, long to) {
             if (YOU.equals(who)) return takenBetween(from, to);
@@ -245,10 +262,15 @@ public class DpsTracker {
 
         /** One fight's leaderboard, or null if it isn't a boss (or nobody hit it). */
         Board boardOf(Fight f) {
+            return boardOf(f, false);
+        }
+
+        /** {@code any}: any enemy at all, not just bosses (for the overlay when there's no boss around). */
+        Board boardOf(Fight f, boolean any) {
             long t = f.total();
             if (t <= 0) return null;
             Kind kind = kindOf(f.enemyType);
-            if (kind == Kind.OTHER && f.maxHp < BOSS_HP) return null;
+            if (!any && kind == Kind.OTHER && f.maxHp < BOSS_HP) return null;
             Map<String, Long> by = f.byName();
             Map<String, long[]> guard = f.guardedByName();
             Board b = new Board(f.enemyName, f.maxHp, f.seconds(), f.killed, t, rows(by, t, f.seconds(), guard, f.firstHitMs, f.lastHitMs));
@@ -316,6 +338,18 @@ public class DpsTracker {
                     long[] tk = takenBy(e.getKey(), from, to);
                     r.takenDmg = tk[0];
                     r.takenHits = tk[1];
+                    Integer ct = classes.get(e.getKey());
+                    if (ct != null) r.classType = ct;
+                    int[] gr = gear.get(e.getKey());
+                    if (gr != null) r.gear = gr.clone();
+                    String[] gdat = gearData.get(e.getKey());
+                    if (gdat != null) r.gearData = gdat.clone();
+                    long[] gn = gone.get(e.getKey());
+                    // during the fight (or just after its last hit)
+                    if (gn != null && gn[0] >= from && (to == Long.MAX_VALUE || gn[0] <= to + 15_000)) {
+                        r.goneMs = gn[0];
+                        r.died = gn[1] == 1;
+                    }
                 }
                 rows.add(r);
             }
@@ -403,6 +437,16 @@ public class DpsTracker {
         return a != null && (a == ORYX_GUARD || a == ORYX_GUARD_EXALTED);
     }
 
+    /** The toughest enemy that died in the last {@code withinMs} (the boss whose bag just dropped), or null. */
+    public synchronized String lastKill(long withinMs) {
+        if (current == null) return null;
+        long now = clock.getAsLong();
+        Fight best = null;
+        for (Fight f : current.fights)
+            if (f.killed && now - f.lastHitMs <= withinMs && (best == null || f.maxHp > best.maxHp)) best = f;
+        return best == null ? null : best.enemyName;
+    }
+
     /** Newest first; only runs where damage was done. */
     public synchronized List<Run> runs() {
         List<Run> out = new ArrayList<>();
@@ -413,6 +457,37 @@ public class DpsTracker {
 
     public synchronized List<Board> boards(Run run) {
         return run.boards();
+    }
+
+    /** For the mini overlay: the fight you hit most recently in this run, and the whole run so far. */
+    static final class Live {
+        Board fight, run;
+        /** True while the fight is still going (someone hit it in the last few seconds and it isn't dead). */
+        boolean active;
+    }
+
+    synchronized Live live() {
+        if (current == null || !current.hasDamage()) return null;
+        Live l = new Live();
+        // the boss hit most recently; if no boss has been hit, the toughest enemy hit in the last half minute
+        Fight latest = null, tough = null;
+        long now = clock.getAsLong();
+        for (Fight f : current.fights) {
+            if (f.total() <= 0) continue;
+            if (current.boardOf(f) != null) {
+                if (latest == null || f.lastHitMs > latest.lastHitMs) latest = f;
+            } else if (now - f.lastHitMs < 30_000 && (tough == null || f.maxHp > tough.maxHp)) {
+                tough = f;
+            }
+        }
+        Fight show = latest != null ? latest : tough;
+        if (show != null) {
+            l.fight = current.boardOf(show, true);
+            l.active = !show.killed && now - show.lastHitMs < 8000;
+        }
+        List<Board> all = current.boards();
+        for (Board b : all) if (b.kind == Kind.WHOLE_RUN) l.run = b;
+        return l;
     }
 
     // ------------------------------------------------------------------ packets
@@ -426,12 +501,73 @@ public class DpsTracker {
         playerNames.clear();
         minionOwner.clear();
         enemies.clear();
+        enemyPos.clear();
+        deaths.clear();
         fights.clear();
         animation.clear();
         myHp = -1;
         rng = new Rng(p.seed);
         shots.clear();
         enemyDef.clear();
+        notifyListener();
+    }
+
+    private static final packets.data.enums.StatType[] GEAR = {packets.data.enums.StatType.INVENTORY_0_STAT,
+            packets.data.enums.StatType.INVENTORY_1_STAT, packets.data.enums.StatType.INVENTORY_2_STAT, packets.data.enums.StatType.INVENTORY_3_STAT};
+
+    /** Notes what a player has equipped, for the leaderboards. */
+    private void readGear(int id, StatData[] stats) {
+        if (current == null || stats == null) return;
+        String who = id == myId && myId != -1 ? YOU : playerNames.get(id);
+        if (who == null) return;
+        int[] g = null;
+        for (StatData d : stats) {
+            if (d.statTypeNum == 80 && d.stringStatValue != null) { // item data: enchantments, one entry per slot
+                String[] parts = d.stringStatValue.split(",", -1);
+                String[] gd = new String[4];
+                for (int k = 0; k < 4; k++) gd[k] = k < parts.length ? parts[k] : "";
+                current.gearData.put(who, gd);
+            }
+            for (int k = 0; k < 4; k++) {
+                if (d.statType != GEAR[k]) continue;
+                if (g == null) g = current.gear.computeIfAbsent(who, x -> new int[]{-1, -1, -1, -1});
+                g[k] = d.statValue;
+            }
+        }
+    }
+
+    /** Where each enemy is, for {@link #enemyNear}. */
+    private final Map<Integer, float[]> enemyPos = new HashMap<>();
+    /** Enemies that just went: {time, x bits, y bits, object type}. */
+    private final java.util.ArrayDeque<long[]> deaths = new java.util.ArrayDeque<>();
+
+    /**
+     * The enemy that died where a bag just appeared (within a few tiles, in the last few seconds), or "" if none: who
+     * dropped it.
+     */
+    synchronized String enemyNear(double x, double y) {
+        if (Double.isNaN(x) || Double.isNaN(y)) return "";
+        long now = clock.getAsLong();
+        long[] best = null;
+        double bestD = 4.0;
+        for (long[] d : deaths) {
+            if (now - d[0] > 8000) continue;
+            double dx = Float.intBitsToFloat((int) d[1]) - x, dy = Float.intBitsToFloat((int) d[2]) - y;
+            double dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist <= bestD) {
+                bestD = dist;
+                best = d;
+            }
+        }
+        if (best == null) return "";
+        String n = AboutMe.objectName((int) best[3], "");
+        return n == null ? "" : n.trim();
+    }
+
+    /** Someone died or left the map (from the Players tracker), for the leaderboards. */
+    synchronized void noteGone(String name, boolean died, long at) {
+        if (current == null || name == null || name.isEmpty()) return;
+        current.gone.put(name, new long[]{at, died ? 1 : 0});
         notifyListener();
     }
 
@@ -452,6 +588,11 @@ public class DpsTracker {
                         playerNames.put(id, n);
                         if (id == myId) setMyName(n);
                     }
+                    readGear(id, o.status.stats);
+                    if (current != null) {
+                        String who = id == myId && myId != -1 ? YOU : playerNames.get(id);
+                        if (who != null) current.classes.put(who, o.objectType);
+                    }
                     if (id == myId) {
                         myHp = intStat(o.status.stats, HP_STAT, myHp);
                         readMyStats(o.status.stats);
@@ -464,6 +605,7 @@ public class DpsTracker {
                 if (maxHp <= 0) continue;
                 int hp = intStat(o.status.stats, HP_STAT, maxHp);
                 enemies.put(id, new int[]{o.objectType, maxHp, hp});
+                if (o.status.pos != null) enemyPos.put(id, new float[]{o.status.pos.x, o.status.pos.y});
                 readEnemyStats(id, o.status.stats);
             }
         }
@@ -472,6 +614,12 @@ public class DpsTracker {
             for (int id : p.drops) {
                 Fight f = fights.remove(id);
                 int[] e = enemies.remove(id);
+                float[] where = enemyPos.remove(id);
+                if (e != null && where != null) {
+                    // where and when it went, so a bag that appears there can say who dropped it
+                    deaths.addLast(new long[]{now, Float.floatToIntBits(where[0]), Float.floatToIntBits(where[1]), e[0]});
+                    while (deaths.size() > 60) deaths.removeFirst();
+                }
                 if (f != null) {
                     // Gone from view: treat as a kill if it was nearly dead or we landed the killing blow.
                     if (f.killed || (e != null && f.hp >= 0 && f.hp <= Math.max(1, f.maxHp * 0.03))) {
@@ -499,6 +647,7 @@ public class DpsTracker {
                 playerNames.put(s.objectId, n);
                 if (s.objectId == myId) setMyName(n);
             }
+            if (playerNames.containsKey(s.objectId) || s.objectId == myId) readGear(s.objectId, s.stats);
             if (s.objectId == myId && myId != -1) {
                 int hpNow = intStat(s.stats, HP_STAT, Integer.MIN_VALUE);
                 if (hpNow != Integer.MIN_VALUE) {
@@ -510,6 +659,7 @@ public class DpsTracker {
             }
             int[] e = enemies.get(s.objectId);
             if (e == null) continue;
+            if (s.pos != null) enemyPos.put(s.objectId, new float[]{s.pos.x, s.pos.y});
             readEnemyStats(s.objectId, s.stats);
             int an = intStat(s.stats, ANIMATION_STAT, Integer.MIN_VALUE);
             if (an != Integer.MIN_VALUE) animation.put(s.objectId, an);
@@ -771,6 +921,19 @@ public class DpsTracker {
         int c = n.indexOf(',');
         String out = (c >= 0 ? n.substring(0, c) : n).trim();
         return out.isEmpty() ? n.trim() : out;
+    }
+
+    /**
+     * True for monsters (and anything the game files don't say): false for pets, players, walls, portals and other
+     * objects, which can share a boss's name (a "Killer Bee Queen" pet skin, say).
+     */
+    static boolean isMonster(int type) {
+        String c = null;
+        try {
+            c = IdToAsset.getClazz(type);
+        } catch (Throwable ignored) {
+        }
+        return c == null || c.isEmpty() || c.equalsIgnoreCase("Character");
     }
 
     static String enemyName(int type) {

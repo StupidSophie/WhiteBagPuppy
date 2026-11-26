@@ -30,13 +30,31 @@ final class FameBonusPage extends MoreTabs.Page {
         addHierarchyListener(e -> {
             if ((e.getChangeFlags() & java.awt.event.HierarchyEvent.SHOWING_CHANGED) != 0 && isShowing()) changed();
         });
+        // redraw as soon as anything changes: a dungeon done, the game's counts when you load in, a tick by hand
+        FameDungeons.addListener(this::changed);
+        // ...and when you switch to another character
+        Timer swap = new Timer(1000, e -> {
+            Integer id = charId.get();
+            int now = id == null ? -1 : id;
+            String acc = account.get();
+            String who = acc + ":" + now;
+            if (!who.equals(shownFor)) {
+                shownFor = who;
+                changed();
+            }
+        });
+        swap.start();
     }
+
+    /** The account and character the page was last drawn for. */
+    private String shownFor = "";
 
     @Override
     void fill() {
         String acc = account.get();
         Integer id = charId.get();
         int playingId = id == null ? -1 : id;
+        shownFor = acc + ":" + playingId;
         // only the character you're on right now
         FameDungeons.Char c = acc == null || playingId < 0 ? null : FameDungeons.get(acc, playingId);
 

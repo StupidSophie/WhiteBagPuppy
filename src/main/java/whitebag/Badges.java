@@ -301,6 +301,12 @@ final class Badges {
     /** Set once the game files are read (item names are needed for the collection badges). */
     static volatile boolean ready;
     private static List<Unlock> unlocks;
+
+    /** Reads badges.txt again (after account data was moved). */
+    static synchronized void reload() {
+        unlocks = null;
+        events = null;
+    }
     private static Map<String, Map<String, Long>> events; // account -> event -> count
 
     static synchronized List<Unlock> unlocks() {

@@ -102,6 +102,31 @@ public class AssetExtractor {
         }
     }
 
+    /**
+     * Reads the game files again without asking, if the game has been updated since they were last read (or always,
+     * with {@code force}). Returns true if it read them. Only when the game's resources.assets can be found; otherwise
+     * nothing happens (the first-run dialog asks where the game is).
+     */
+    public static synchronized boolean updateQuietly(String version, boolean force) throws IOException, ParserConfigurationException {
+        File file = assetFile();
+        if (file == null || !file.exists()) return false;
+        String lastModifiedTime = lastEdited(version);
+        if (!force && checkUpdateAssets(lastModifiedTime) == 0) return false;
+        extractAssets(file, lastModifiedTime);
+        extractAssetsFromXML();
+        return true;
+    }
+
+    /** True if the game files have changed since the pup last read them. */
+    public static boolean needsUpdate(String version) {
+        try {
+            File file = assetFile();
+            return file != null && file.exists() && checkUpdateAssets(lastEdited(version)) != 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     public static String lastEdited(String version) throws IOException {
         File file = assetFile();
         BasicFileAttributes attr;

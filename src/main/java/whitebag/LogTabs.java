@@ -93,6 +93,11 @@ final class LogTabs {
             this(labels, 0, pick);
         }
 
+        /** Shows segment i as chosen (without calling back). */
+        void choose(int i) {
+            if (i >= 0 && i < getComponentCount() && getComponent(i) instanceof JToggleButton) ((JToggleButton) getComponent(i)).setSelected(true);
+        }
+
         /** With {@code selected} picked to start with. */
         Segments(String[] labels, int selected, Pick pick) {
             super(new FlowLayout(FlowLayout.LEFT, 4, 0));
@@ -655,7 +660,9 @@ final class LogTabs {
                 for (DpsTracker.Row r : b.rows) {
                     sb.append(String.format(Locale.ROOT, "%2d. %-18s %9s  %5.1f%%  %s dps%s%n", rank++, r.name, shortNum(r.damage), r.percent, shortNum((long) r.dps),
                             (r.guardHits > 0 ? "  (" + r.guardHits + " guarded hits, " + shortNum(r.guardDmg) + ")" : "")
-                                    + (r.takenHits > 0 ? "  took " + shortNum(r.takenDmg) + " in " + r.takenHits + " hits" : "")));
+                                    + (r.takenHits > 0 ? "  took " + shortNum(r.takenDmg) + " in " + r.takenHits + " hits" : "")
+                                    + (r.goneMs > 0 ? (r.died ? "  [died]" : "  [left]") : "")
+                                    + (r.gear != null ? "  " + gearText(r.gear) : "")));
                 }
             }
             Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(sb.toString()), null);
@@ -666,16 +673,91 @@ final class LogTabs {
         }
     }
 
-    /** One leaderboard: the boss, then a stepped bar per player. */
+    /** An item and its enchantments, as HTML for a tooltip or a pop-up. */
+    static String itemDetail(int id, String data) {
+        String name = AboutMe.names(java.util.Collections.singletonList(id));
+        StringBuilder b = new StringBuilder("<html><b>").append(esc(name)).append("</b>");
+        java.util.List<Integer> slots = Enchant.slots(data);
+        if (slots == null) {
+            b.append("<br>No enchantment slots");
+        } else if (slots.isEmpty()) {
+            b.append("<br>No enchantments");
+        } else {
+            Enchant r = slots.size() <= 4 ? Enchant.values()[slots.size()] : Enchant.NONE;
+            b.append("<br><font color='#").append(String.format("%06X", r.color.getRGB() & 0xFFFFFF)).append("'><b>")
+                    .append(r.label.isEmpty() ? slots.size() + " slots" : r.label).append("</b></font>");
+            for (int e : slots) b.append("<br>").append(e < 0 ? "(empty slot)" : esc(EnchantNames.line(e)).replace("\n", "<br>"));
+        }
+        return b.append("</html>").toString();
+    }
+
+    private static String esc(String s) {
+        return s == null ? "" : s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    }
+
+    /** "Staff of X, Tome of Y, ..." for the copied text. */
+    static String gearText(int[] gear) {
+        List<Integer> ids = new ArrayList<>();
+        for (int id : gear) if (id > 0) ids.add(id);
+        return ids.isEmpty() ? "" : "(" + AboutMe.names(ids) + ")";
+    }
+
+    /** One leaderboard: the boss, then a stepped bar per player (with their gear under the name when it's known). */
     static class BoardView extends JComponent {
-        private static final int ROW = 26, HEAD = 50, COLS = 20;
+        private static final int HEAD = 50, COLS = 20, ICON = 16;
+        private final int ROW;
         private final DpsTracker.Board b;
         private final boolean divider;
+        /** Item boxes under the names, for the tooltips: {x, y, w, h, item id (or -class), row, slot}. */
+        private final List<int[]> boxes = new ArrayList<>();
+
+        private int[] boxAt(int x, int y) {
+            for (int[] bx : boxes) if (x >= bx[0] && x < bx[0] + bx[2] && y >= bx[1] && y < bx[1] + bx[3]) return bx;
+            return null;
+        }
+
+        private String detail(int[] bx) {
+            if (bx[4] < 0) return AboutMe.objectName(-bx[4], "");
+            DpsTracker.Row r = bx[5] >= 0 && bx[5] < b.rows.size() ? b.rows.get(bx[5]) : null;
+            String data = r != null && r.gearData != null && bx[6] >= 0 && bx[6] < r.gearData.length ? r.gearData[bx[6]] : null;
+            return itemDetail(bx[4], data);
+        }
 
         BoardView(DpsTracker.Board b, boolean divider) {
             this.b = b;
             this.divider = divider;
+            boolean gear = false;
+            boolean classes = false;
+            for (DpsTracker.Row r : b.rows) {
+                if (r.gear != null || r.goneMs > 0) gear = true;
+                if (r.classType > 0) classes = true;
+            }
+            ROW = gear ? 44 : 26;
             setAlignmentX(LEFT_ALIGNMENT);
+            if (gear || classes) {
+                setToolTipText("");
+                // click an item: its enchantments stay open until you click elsewhere
+                addMouseListener(new java.awt.event.MouseAdapter() {
+                    @Override
+                    public void mouseClicked(java.awt.event.MouseEvent e) {
+                        int[] bx = boxAt(e.getX(), e.getY());
+                        if (bx == null || bx[4] < 0) return;
+                        JPopupMenu pop = new JPopupMenu();
+                        JLabel l = new JLabel(detail(bx));
+                        l.setFont(Cute.font(Font.PLAIN, 12));
+                        l.setBorder(new EmptyBorder(6, 8, 6, 8));
+                        pop.add(l);
+                        pop.show(BoardView.this, bx[0], bx[1] + bx[3] + 2);
+                    }
+                });
+                setCursor(Cursor.getDefaultCursor());
+            }
+        }
+
+        @Override
+        public String getToolTipText(java.awt.event.MouseEvent e) {
+            int[] bx = boxAt(e.getX(), e.getY());
+            return bx == null ? null : detail(bx);
         }
 
         @Override
@@ -738,6 +820,7 @@ final class LogTabs {
 
             int y = top + HEAD + COLS - 4;
             int rank = 1;
+            boxes.clear();
             long topDmg = b.rows.isEmpty() ? 0 : b.rows.get(0).damage;
             for (DpsTracker.Row r : b.rows) {
                 Cute.smooth(g);
@@ -746,9 +829,51 @@ final class LogTabs {
                 g.setColor(r.you ? Pixel.PINK_INK : Pixel.MUTED);
                 g.drawString(String.valueOf(rank), 0, y + 13);
                 String name = r.name;
-                while (fm.stringWidth(name) > nameW - 34 && name.length() > 3) name = name.substring(0, name.length() - 2) + "…";
+                // their class's picture before the name
+                int nx = 22;
+                if (r.classType > 0) {
+                    java.awt.image.BufferedImage ci = AboutMe.sprite(r.classType, 18);
+                    if (ci != null) {
+                        g.drawImage(ci, 20, y - 1, 18, 18, null);
+                        boxes.add(new int[]{20, y - 1, 18, 18, -r.classType, rank - 1, -1});
+                    }
+                    nx = 41;
+                }
+                while (fm.stringWidth(name) > nameW - 12 - nx && name.length() > 3) name = name.substring(0, name.length() - 2) + "…";
                 g.setColor(r.you ? Pixel.PINK_INK : Pixel.INK);
-                g.drawString(name, 22, y + 13);
+                g.drawString(name, nx, y + 13);
+                if (ROW > 26) {
+                    // their gear under the name, then whether they died or left during the fight
+                    int gx = 22;
+                    if (r.gear != null) {
+                        for (int k = 0; k < r.gear.length; k++) {
+                            int id = r.gear[k];
+                            // the frame takes the enchantment's colour (uncommon green ... divine gold)
+                            String data = r.gearData != null && k < r.gearData.length ? r.gearData[k] : null;
+                            java.util.List<Integer> sl = id > 0 ? Enchant.slots(data) : null;
+                            Color fc = sl != null && !sl.isEmpty() && sl.size() <= 4 ? Enchant.values()[sl.size()].color : null;
+                            Pixel.frame(g, gx, y + 19, ICON + 4, ICON + 4, Pixel.TRACK, fc, fc == null ? 0 : 2);
+                            if (id > 0) {
+                                java.awt.image.BufferedImage img = AboutMe.sprite(id, ICON);
+                                if (img != null) g.drawImage(img, gx + 2, y + 21, ICON, ICON, null);
+                                boxes.add(new int[]{gx, y + 19, ICON + 4, ICON + 4, id, rank - 1, k});
+                            }
+                            gx += ICON + 6;
+                        }
+                    }
+                    if (r.goneMs > 0) {
+                        Cute.smooth(g);
+                        String tag = r.died ? "died" : "left";
+                        g.setFont(Cute.font(Font.BOLD, 10));
+                        FontMetrics tf = g.getFontMetrics();
+                        int tw = tf.stringWidth(tag) + 10;
+                        Pixel.frame(g, gx + 2, y + 22, tw, 14, r.died ? Theme.c(0xC2185B) : Pixel.MUTED, null, 0);
+                        g.setColor(Theme.WHITE);
+                        g.drawString(tag, gx + 7, y + 33);
+                    }
+                    Cute.smooth(g);
+                    g.setFont(Cute.font(Font.BOLD, 12));
+                }
                 // stepped bar on a track
                 Pixel.frame(g, barX, y + 2, barW, 14, Pixel.TRACK, null, 0);
                 double frac = topDmg == 0 ? 0 : (double) r.damage / topDmg;

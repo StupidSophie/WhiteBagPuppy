@@ -36,6 +36,8 @@ final class ItemXml {
         String tier = "";
         String labels = "";
         String rarity = "";
+        /** The name the game shows ("Demon Lord's Skull" for "AoOSkull"). */
+        String display = "";
         int slotType = -1;
         boolean potion, consumable, soulbound;
         Element element;
@@ -103,6 +105,7 @@ final class ItemXml {
                 info.tier = text(o, "Tier");
                 info.labels = text(o, "Labels");
                 info.rarity = text(o, "Rarity");
+                info.display = text(o, "DisplayId");
                 try {
                     info.slotType = Integer.parseInt(text(o, "SlotType"));
                 } catch (Exception ignored) {

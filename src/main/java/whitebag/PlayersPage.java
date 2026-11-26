@@ -38,6 +38,31 @@ final class PlayersPage extends MoreTabs.Page {
             for (PlayersTracker.Player p : party) card(p);
         }
 
+        // who left or died near you on this map
+        List<PlayersTracker.Gone> gone = tracker.gone();
+        int died = 0;
+        for (PlayersTracker.Gone g : gone) if (g.died) died++;
+        gap(14);
+        list.add(heading("left or died", gone.isEmpty() ? null : died + " died  ·  " + (gone.size() - died) + " left"));
+        gap(8);
+        if (gone.isEmpty()) {
+            list.add(note("When someone near you disappears, they show up here with the gear they had on: \"died\" if a gravestone "
+                    + "appeared where they stood, \"left\" if not (nexused, went to the vault or logged off). People who walk out "
+                    + "of view or just teleport don't count. Your party members also go in the pup diary."));
+        } else {
+            int n = 0;
+            for (PlayersTracker.Gone g : gone) {
+                if (n++ >= 15) {
+                    list.add(note("...and " + (gone.size() - 15) + " earlier."));
+                    break;
+                }
+                String ago = ago(g.at);
+                String what = (g.died ? "Died " : "Left ") + ago
+                        + (!g.died && g.hpPct >= 0 && g.hpPct < 50 ? " at " + g.hpPct + "% HP (probably nexused)" : "");
+                card(new PlayersTracker.Player(-1, g.thing, g.party, g.at), what, g.died);
+            }
+        }
+
         gap(14);
         list.add(heading(map == null || map.isEmpty() ? "players nearby" : "players in " + map.toLowerCase(Locale.ROOT),
                 rest.isEmpty() ? null : String.valueOf(rest.size())));
@@ -56,7 +81,18 @@ final class PlayersPage extends MoreTabs.Page {
         }
     }
 
+    private static String ago(long at) {
+        long s = Math.max(0, (System.currentTimeMillis() - at) / 1000);
+        if (s < 60) return "just now";
+        if (s < 3600) return (s / 60) + " min ago";
+        return (s / 3600) + " h ago";
+    }
+
     private void card(PlayersTracker.Player p) {
+        card(p, null, false);
+    }
+
+    private void card(PlayersTracker.Player p, String status, boolean died) {
         MeTracker.Thing t = p.thing;
         String cls = AboutMe.objectName(t.objectType, "Player");
         int stars = t.i(StatType.NUM_STARS_STAT, -1);
@@ -66,7 +102,9 @@ final class PlayersPage extends MoreTabs.Page {
         String line3 = (fame > 0 ? String.format(Locale.ROOT, "%,d fame", fame) : "")
                 + (guild.isEmpty() ? "" : (fame > 0 ? "  ·  " : "") + "Guild: " + guild)
                 + (p.party ? ((fame > 0 || !guild.isEmpty()) ? "  ·  " : "") + "in your party" : "");
-        list.add(new AboutMe.Card(t.objectType, p.name(), line2, line3));
+        if (status != null) line3 = status + (line3.isEmpty() ? "" : "  ·  " + line3);
+        AboutMe.Card card = new AboutMe.Card(t.objectType, p.name() + (status == null ? "" : died ? "  (died)" : "  (left)"), line2, line3);
+        list.add(card);
         gap(6);
 
         List<Integer> gear = new ArrayList<>();

@@ -31,12 +31,77 @@ import java.util.Set;
 public class WhiteBagNotifier {
     private static final String SETTINGS_FILE = "whitebag-notifier.properties";
 
+    /** A yes/no setting, forgiving about spaces and capitals ("true", " True ", "yes", "on"). */
+    private boolean yes(String key) {
+        String v = settings.getProperty(key);
+        if (v == null) return false;
+        v = v.trim().toLowerCase(java.util.Locale.ROOT);
+        return v.equals("true") || v.equals("yes") || v.equals("on") || v.equals("1");
+    }
+
+
+
     private final Properties settings = new Properties();
+    /** The running app (for tests). */
+    static volatile WhiteBagNotifier current;
     private final DiscordWebhook webhook = new DiscordWebhook(this::log);
+    /** The UPE contest (Loot > UPE Contest), the same scoring as Loot Puppy. */
+    private final Contest contest = new Contest(settings, "upe-contest.txt");
+    /** The mini UPE window (UPE tab > Mini UPE window). */
+    private final UpeMini upeMini = new UpeMini(contest, settings, () -> saveSettings());
+    private final ContestPage.Ctl contestCtl = new ContestPage.Ctl() {
+        @Override public void log(String line) {
+            WhiteBagNotifier.this.log(line);
+        }
+
+        public Contest contest() { return contest; }
+        public Properties settings() { return settings; }
+        public void save() { saveSettings(); }
+        public boolean pick(Account a) {
+            int charId = a.me.charId();
+            MeTracker.Thing ch = a.me.character();
+            if (a.key() == null || charId < 0 || ch == null) return false;
+            String name = DpsTracker.cleanName(ch.s(packets.data.enums.StatType.NAME_STAT));
+            contest.pick(a.key(), charId, name, AboutMe.objectName(ch.objectType, ""));
+            settings.setProperty("contest.on", "true");
+            saveSettings();
+            log("*wags tail* UPE contest character set: " + contest.who() + ". Points start now!");
+            refreshContest();
+            return true;
+        }
+        public void postTotal() { postContestTotal(false); }
+        public UpeMini mini() { return upeMini; }
+        public void test(String url) {
+            if (!DiscordWebhook.isDiscordWebhook(url)) {
+                JOptionPane.showMessageDialog(frame, "That doesn't look like a Discord webhook URL.\n\nIn Discord: Server Settings > Integrations > Webhooks > New Webhook > Copy Webhook URL.",
+                        "Contest webhook", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            log("*runs off to the contest channel with a test post*");
+            webhook.sendTest(url, settings.getProperty("ping.userId", ""));
+        }
+    };
+
+    private void refreshContest() {
+        SwingUtilities.invokeLater(() -> { for (Account a : accounts) if (a.contestPage != null) a.contestPage.changed(); });
+    }
+
+    private void postContestTotal(boolean died) {
+        log((died ? "Final UPE total: " : "UPE total: ") + contest.total() + " points.");
+        String url = settings.getProperty("contest.webhook", "");
+        if (!DiscordWebhook.isDiscordWebhook(url)) return;
+        // RIP: a picture of the game at that moment
+        byte[] shot = died && !"false".equals(settings.getProperty("contest.ripShot")) ? GameShot.capture() : null;
+        if (died && shot == null && GameShot.lastProblem != null) log("*tilts head* no RIP picture: " + GameShot.lastProblem + ".");
+        webhook.sendJson(url, contest.summaryJson(died, shot != null),
+                shot == null ? java.util.Collections.emptyMap() : java.util.Collections.singletonMap("game.jpg", shot), "contest total");
+    }
     /** One per game account; the first exists from the start and is claimed by the first game seen. */
     private final List<Account> accounts = new java.util.concurrent.CopyOnWriteArrayList<>();
     /** The mini overlay (made with the Home page). */
     private MiniOverlay overlay;
+    /** The widget bar under the header (gold, fame, dust...). */
+    private WidgetBar widgetBar;
     private volatile Account selected;
     private AccountRouter router;
     private Pixel.Tabs tabs;
@@ -62,6 +127,147 @@ public class WhiteBagNotifier {
             return owner;
         }
         @Override public Set<BagType> watched() { return watchedBags; }
+        @Override public void guildDeath(Account a, PlayersTracker.Gone g, String map) { onGuildDeath(a, g, map); }
+        @Override public void myDeath(Account a, DeathLog.Death d, String gearData) { onMyDeath(a, d, gearData); }
+        @Override public void deathNotice(Account a, DeathNotice n) { onDeathNotice(a, n); }
+        @Override public void wormholes(Account a, String where, java.util.Map<String, Integer> seen, String fresh) {
+            java.util.List<String> parts = new java.util.ArrayList<>();
+            for (java.util.Map.Entry<String, Integer> e : seen.entrySet()) parts.add(e.getKey() + (e.getValue() > 1 ? " \u00d7" + e.getValue() : ""));
+            AttiFeed.myRealm = (where == null ? "your realm" : where) + ": " + String.join(", ", parts);
+            log("*ears perk up* alien wormholes in " + (where == null ? "this realm" : where) + ": " + String.join(", ", parts)
+                    + " (" + fresh + " just spotted; I only see the ones that come into view)");
+            boolean ticked = false;
+            for (String k : fresh.split(", ")) ticked |= AttiFeed.ticked(k + " Wormhole");
+            if (ticked && AttiFeed.pings() && AttiFeed.sound()) Squeak.playEvent(fresh, "event");
+        }
+
+        @Override public void danger(Account a, String enemy, int deaths, int nearly) {
+            if ("false".equals(settings.getProperty("danger.on", "true"))) return;
+            java.util.List<String> why = new java.util.ArrayList<>(), shortWhy = new java.util.ArrayList<>();
+            if (deaths > 0) {
+                why.add(deaths == 1 ? "it killed you once" : "it's killed you " + deaths + " times");
+                shortWhy.add(deaths == 1 ? "killed you once" : "killed you " + deaths + "×");
+            }
+            if (nearly > 0) {
+                why.add(nearly == 1 ? "it nearly killed you once" : "it's nearly killed you " + nearly + " times");
+                shortWhy.add(nearly == 1 ? "nearly killed you once" : "nearly killed you " + nearly + "×");
+            }
+            log((accounts.size() > 1 ? a.prefix() : "") + "*growls* careful! " + enemy + " is here (" + String.join(", and ", why) + ").");
+            Squeak.playDanger();
+            if (overlay != null) overlay.danger("Careful: " + enemy + " (" + String.join(", ", shortWhy) + ")");
+        }
+        @Override public ContestPage.Ctl contestCtl() { return contestCtl; }
+        @Override public void contestBag(Account a, BagDrop drop) {
+            if (!contest.on()) return;
+            if (contest.charId() < 0) {
+                // contest mode is on but no character is picked (after a RIP, say): say so instead of staying quiet
+                java.util.List<String> ut = new java.util.ArrayList<>();
+                for (ItemInfo it : drop.items()) if (Contest.counts(it)) ut.add(it.name);
+                if (!ut.isEmpty()) log("*tilts head* UPE: " + String.join(", ", ut) + " dropped, but no UPE character is picked, so it wasn't counted. "
+                        + "Press \"Use the character I'm on now\" on the UPE tab (then add this one with /upe add in Biscuit).");
+                return;
+            }
+            MeTracker.Thing ch = a.me.character();
+            java.util.List<Contest.Score> scores = contest.score(drop, a.dps.lastKill(20_000), ch == null ? -1 : ch.objectType);
+            java.util.List<String> blueprints = Contest.blueprints(drop);
+            if (scores.isEmpty() && blueprints.isEmpty()) return; // no UT or ST, and no blueprint
+            String items = String.join(", ", drop.itemNames());
+            if (a.me.charId() != contest.charId()) {
+                log("*sniffs* " + drop.bagName + " bag with " + items + ", but you're not on your UPE character, so it doesn't count.");
+                return;
+            }
+            if (contest.alreadyCounted(drop)) return;
+            int sum = 0;
+            for (Contest.Score s : scores) sum += s.points;
+            contest.add(scores, drop);
+            saveSettings();
+            refreshContest();
+            if (!blueprints.isEmpty()) log("*sniffs* UPE: logged " + String.join(", ", blueprints) + " (blueprints are 0 points).");
+            if (sum == 0 && blueprints.isEmpty()) {
+                log("*sniffs* UPE, no points: " + Contest.lines(scores).replace("\n", "; ") + ". Total: " + contest.total() + ".");
+                return;
+            }
+            String why = Contest.lines(scores);
+            if (!blueprints.isEmpty()) why = why.isEmpty() ? Contest.blueprintLines(blueprints) : why + "\n" + Contest.blueprintLines(blueprints);
+            if (sum > 0) log("*BARK!* UPE +" + sum + " points: " + Contest.lines(scores).replace("\n", "; ") + ". Total: " + contest.total() + ".");
+            String url = settings.getProperty("contest.webhook", "");
+            if (!DiscordWebhook.isDiscordWebhook(url)) return;
+            // its own post for the contest channel (the normal bag post, if any, goes to your usual webhook)
+            BagDrop post = drop.copy();
+            post.note = contest.bagNote(sum);
+            post.detail = why;
+            if (shotBox != null && shotBox.isSelected()) post.gameShot = drop.gameShot != null ? drop.gameShot : GameShot.capture();
+            webhook.sendBag(url, "", post);
+        }
+        @Override public void contestCraft(Account a, int itemId, boolean soulFire, Enchant enchant) {
+            if (!contest.on() || contest.charId() < 0) return;
+            if (a.me.charId() != contest.charId()) return;
+            MeTracker.Thing ch = a.me.character();
+            int before = contest.total();
+            String line = contest.craft(ItemInfo.of(itemId), ch == null ? -1 : ch.objectType, soulFire, enchant);
+            if (line == null) return;
+            int got = contest.total() - before;
+            saveSettings();
+            refreshContest();
+            log((got > 0 ? "*BARK!* UPE +" + got + " points: " : "*sniffs* UPE, no points: ") + line + ". Total: " + contest.total() + ".");
+            String url = settings.getProperty("contest.webhook", "");
+            if (got > 0 && DiscordWebhook.isDiscordWebhook(url)) {
+                String json = "{\"username\":" + DiscordWebhook.str(DiscordWebhook.USERNAME) + ",\"embeds\":[{\"title\":" + DiscordWebhook.str(soulFire ? "Forged with Concentrated Soul Fire" : "Forged at the Forge")
+                        + ",\"description\":" + DiscordWebhook.str("**" + contest.bagNote(got) + "**\n" + line) + ",\"color\":" + 0xE8742E + "}]}";
+                webhook.sendJson(url, json, java.util.Collections.emptyMap(), "forge post");
+            }
+        }
+        @Override public void contestUpgrade(Account a, UpgradeWatch.Upgrade u) {
+            if (!contest.on() || contest.charId() < 0 || a.me.charId() != contest.charId()) return;
+            MeTracker.Thing ch = a.me.character();
+            int before = contest.total();
+            String line = contest.upgrade(ItemInfo.of(u.item), ch == null ? -1 : ch.objectType, u.to);
+            if (line == null) return;
+            int got = contest.total() - before;
+            saveSettings();
+            refreshContest();
+            log("*BARK!* UPE +" + got + " points: " + line + ". Total: " + contest.total() + ".");
+            String url = settings.getProperty("contest.webhook", "");
+            if (got > 0 && DiscordWebhook.isDiscordWebhook(url)) {
+                String json = "{\"username\":" + DiscordWebhook.str(DiscordWebhook.USERNAME) + ",\"embeds\":[{\"title\":" + DiscordWebhook.str("Upgraded an item")
+                        + ",\"description\":" + DiscordWebhook.str("**" + contest.bagNote(got) + "**\n" + line) + ",\"color\":" + 0xB98CFF + "}]}";
+                webhook.sendJson(url, json, java.util.Collections.emptyMap(), "upgrade post");
+            }
+        }
+        @Override public void contestDied(Account a, int charId, String killedBy) {
+            String pre = accounts.size() > 1 ? a.prefix() : "";
+            if (!contest.on()) return;
+            if (contest.charId() < 0) {
+                if (!killedBy.isEmpty() || charId >= 0) log(pre + "*sniff* saw a death (character #" + charId + "), but there's no UPE contest character picked right now.");
+                return;
+            }
+            if (charId != contest.charId() && a.me.charId() != contest.charId()) { // not the contest character
+                log(pre + "*sniff* a character died (#" + charId + (a.me.charId() >= 0 && a.me.charId() != charId ? ", playing #" + a.me.charId() : "")
+                        + "), but your UPE character is " + contest.who() + ", so the run keeps going. If that was your UPE character, press Post my contest total, then pick your new one.");
+                return;
+            }
+            log("*sad whimper* your UPE character died" + (killedBy.isEmpty() ? "" : " to " + killedBy) + ". Final total: " + contest.total() + " points.");
+            synchronized (contest) {
+                if (contest.charId() < 0) return; // already noticed (the death message and HP 0 can both arrive)
+                contest.died(killedBy);
+            }
+            saveSettings();
+            postContestTotal(true);
+            refreshContest();
+        }
+        @Override public void closeCall(Account a, CloseCalls.Call c) {
+            log((accounts.size() > 1 ? a.prefix() : "") + "*phew* close call! Down to " + c.percent() + "% HP"
+                    + (c.by.isEmpty() ? "" : " from " + c.by) + (c.where.isEmpty() ? "" : " in " + c.where)
+                    + (c.escaped ? ", and you got out of there" : ", but you made it") + ". (Me > Characters > All characters > Close calls)");
+        }
+        @Override public void shiny(Account a, BagDrop drop, java.util.List<String> shinies) {
+            log((accounts.size() > 1 ? a.prefix() : "") + "*sparkly zoomies* SHINY! " + String.join(", ", shinies) + " in " + (drop.mapName.isEmpty() ? "?" : drop.mapName) + "! (Loot > Collection > Shinies)");
+            if (!"false".equals(settings.getProperty("shiny.sound", "true"))) {
+                new javax.swing.Timer(900, e -> Squeak.playShiny()) {{ setRepeats(false); }}.start(); // after the bag's own sound
+            }
+            if (overlay != null) overlay.shiny();
+            if (a.shinyPage != null) a.shinyPage.changed();
+        }
     };
     private final Map<BagType, AbstractButton> bagBoxes = new EnumMap<>(BagType.class);
 
@@ -91,6 +297,19 @@ public class WhiteBagNotifier {
     private java.awt.image.BufferedImage backgroundPicture;
 
     public static void main(String[] args) {
+        // Java drops browser headers (sec-fetch-...) unless told not to; the Realms tab sends them for atti.network
+        System.setProperty("sun.net.http.allowRestrictedHeaders", "true");
+        try {
+            if (Crash.relaunchInOwnFolder(args)) return;
+            Crash.install("White Bag Puppy");
+            launch(args);
+        } catch (Throwable e) {
+            Crash.report(e, true);
+            System.exit(1);
+        }
+    }
+
+    private static void launch(String[] args) {
         System.out.println("Java " + System.getProperty("java.version") + " (" + System.getProperty("sun.arch.data.model") + "-bit)");
         Util.setSaveLogs(false);
         Updater.launchArgs = args.clone();
@@ -104,16 +323,86 @@ public class WhiteBagNotifier {
         }
         Theme.installUi();
         WhiteBagNotifier app = new WhiteBagNotifier();
+        current = app;
         SwingUtilities.invokeLater(app::buildGui);
+        SwingUtilities.invokeLater(Crash::started); // runs after the window is built
         app.loadAssets();
         SwingUtilities.invokeLater(app::checkForUpdate); // after the window (and settings) are ready
+        SwingUtilities.invokeLater(app::askForBiscuitLink);
         SwingUtilities.invokeLater(app::startRecapTimer);
         BookPage.share = app::shareCollection;
+        BadgesPage.moveAccount = (from, to) -> {
+            try {
+                int n = AccountMerge.move(from, to, app.settings);
+                app.saveSettings();
+                Badges.reload();
+                app.log("*happy wiggle* moved " + n + " saved lines into this account: your badges are back! Close and reopen the pup so your bags and stats catch up too.");
+                JOptionPane.showMessageDialog(app.frame, "Done! Your badges are back.\nClose and reopen the pup so the bags and stats catch up too.", "Badges", JOptionPane.INFORMATION_MESSAGE);
+            } catch (Exception ex) {
+                app.log("*whimper* couldn't move the account data: " + ex.getMessage() + ". Nothing is lost: there's a backup in the backups folder.");
+            }
+        };
         BadgesPage.posting = () -> !"false".equals(app.settings.getProperty("badges.post"));
         BadgesPage.setPosting = on -> {
             app.settings.setProperty("badges.post", String.valueOf(on));
             app.saveSettings();
         };
+    }
+
+    // ---------------------------------------------------------------- Biscuit link
+
+    /** Once at start: asks anyone without a Biscuit link to get one with /pup link (unless they said not to). */
+    private void askForBiscuitLink() {
+        if (Boolean.getBoolean("puppy.noAsk")) return;
+        if (DiscordWebhook.isBiscuitLink(settings.getProperty("webhook.url", "")) || "true".equals(settings.getProperty("biscuit.dontAsk"))) return;
+        Timer later = new Timer(2000, e -> {
+            String msg = "<html><body style='width:340px'>"
+                    + "<b>Femcore member? Let Biscuit post your bags and badges for you!</b><br><br>"
+                    + "1. In the Femcore Discord, type <b>/pup link</b><br>"
+                    + "2. Copy the link Biscuit gives you (only you can see it)<br>"
+                    + "3. Press <b>Paste my link</b> here<br><br>"
+                    + "No webhooks needed: Biscuit posts in the right channels with your Discord name and picture.</body></html>";
+            Object[] options = {"Paste my link", "Later", "Don't ask again"};
+            int pick = JOptionPane.showOptionDialog(frame, msg, "White Bag Puppy", JOptionPane.DEFAULT_OPTION,
+                    JOptionPane.INFORMATION_MESSAGE, null, options, options[0]);
+            if (pick == 2) {
+                settings.setProperty("biscuit.dontAsk", "true");
+                saveSettings();
+                log("*nods* I won't ask about the Biscuit link again. You can still paste one in Home > Settings > Webhook URL.");
+            } else if (pick == 0) {
+                pasteBiscuitLink();
+            }
+        });
+        later.setRepeats(false);
+        later.start();
+    }
+
+    /** Asks for the /pup link link (already filled in if it's on the clipboard), saves it and sends a test post. */
+    private void pasteBiscuitLink() {
+        String clip = "";
+        try {
+            Object c = java.awt.Toolkit.getDefaultToolkit().getSystemClipboard().getData(java.awt.datatransfer.DataFlavor.stringFlavor);
+            if (c != null && DiscordWebhook.isBiscuitLink(c.toString())) clip = c.toString().trim();
+        } catch (Exception ignored) {
+        }
+        while (true) {
+            Object got = JOptionPane.showInputDialog(frame, "Paste the link from /pup link:", "Biscuit link", JOptionPane.PLAIN_MESSAGE, null, null, clip);
+            if (got == null) return;
+            String u = got.toString().trim();
+            if (DiscordWebhook.isBiscuitLink(u)) {
+                settings.setProperty("webhook.url", u);
+                // badges go through Biscuit too (it picks the badge channel), unless they have their own webhook on purpose
+                if (DiscordWebhook.isDiscordWebhook(settings.getProperty("badges.url", ""))) settings.remove("badges.url");
+                saveSettings();
+                if (urlField != null) urlField.setText(u);
+                log("*happy wiggle* Biscuit link saved! Your bags and badges go through Biscuit now. Sending a test post...");
+                webhook.sendTest(u, settings.getProperty("ping.userId", ""));
+                return;
+            }
+            JOptionPane.showMessageDialog(frame, "That isn't a Biscuit link. It looks like https://.../pup/post?code=WBP-...\n\n"
+                    + "Type /pup link in the Femcore Discord and copy the whole link.", "Biscuit link", JOptionPane.WARNING_MESSAGE);
+            clip = u;
+        }
     }
 
     // ---------------------------------------------------------------- recaps
@@ -230,12 +519,14 @@ public class WhiteBagNotifier {
         section(home, nowRow, 10);
 
         // friends leaderboard (through the same bot as the recaps)
-        Pixel.Check join = new Pixel.Check("Join the friends leaderboard", "true".equals(settings.getProperty("leaderboard.join")));
+        Pixel.Check join = new Pixel.Check("Join the friends leaderboard", Boolean.parseBoolean(settings.getProperty("leaderboard.join", "true")));
         join.addActionListener(e -> {
             String u = settings.getProperty("recap.url", "");
             if (join.isSelected() && !Recap.isBotUrl(u)) {
-                join.setSelected(false);
-                log("*tilts head* the friends leaderboard needs a bot recap link (https://.../recap?key=...) above first.");
+                // stays ticked: it starts sending once a bot recap link is saved above
+                settings.setProperty("leaderboard.join", "true");
+                saveSettings();
+                log("*tilts head* the friends leaderboard will start once there's a bot recap link (https://.../recap?key=...) above.");
                 return;
             }
             settings.setProperty("leaderboard.join", String.valueOf(join.isSelected()));
@@ -305,10 +596,283 @@ public class WhiteBagNotifier {
         section(hooks, post, 8);
     }
 
+    /** The Guild deaths section: post guildmates who die near you, live, and where to. */
+    private void buildGuildDeathHook(JPanel hooks) {
+        section(hooks, new Pixel.Heading("guild deaths", 2), 26);
+        JLabel intro = Pixel.note("When someone in your guild dies (the game's gravestone message at the top left), it's posted straight away "
+                + "with what killed them, and their class, fame and gear when they were near you. Leave the URL empty to post to the bag webhook "
+                + "(with a Biscuit link, Biscuit posts them in its death channel). Your own deaths can be posted too.");
+        intro.setForeground(Theme.BLACK);
+        section(hooks, intro, 6);
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        row.setOpaque(false);
+        JTextField field = Pixel.field(settings.getProperty("deaths.url", ""), 24, "https://discord.com/api/webhooks/...");
+        Pixel.Button save = new Pixel.Button("Save", false);
+        save.addActionListener(e -> {
+            String u = field.getText().trim();
+            if (!u.isEmpty() && !DiscordWebhook.isValidUrl(u)) {
+                log("*tilts head* that doesn't look like a Discord webhook URL (https://discord.com/api/webhooks/...).");
+                return;
+            }
+            settings.setProperty("deaths.url", u);
+            saveSettings();
+            log(u.isEmpty() ? "*boop* guild death webhook cleared: deaths go to the bag webhook." : "*boop* guild death webhook saved!");
+        });
+        Pixel.Button test = new Pixel.Button("Send test post", false);
+        test.addActionListener(e -> {
+            String u = field.getText().trim();
+            if (!u.isEmpty() && !DiscordWebhook.isValidUrl(u)) {
+                log("*tilts head* that doesn't look like a Discord webhook URL (https://discord.com/api/webhooks/...).");
+                return;
+            }
+            settings.setProperty("deaths.url", u);
+            saveSettings();
+            if (!DiscordWebhook.isValidUrl(deathUrl())) {
+                log("*tilts head* paste a guild death webhook (or a bag webhook) first.");
+                return;
+            }
+            log("*runs off to Discord with a test death*");
+            postDeath(deathUrl(), "Test Pup", 782, 20, 1677, 2695, "MV Pattern Helper 3", "3/8", "MV Pattern Helper 3 120, 95  \u00b7  something unseen 30  \u00b7  MV Pattern Helper 3 210", new int[]{3075, 5356, 3122, 2978},
+                    new String[]{"AAIE_____w==", "", "AAIE_____w==", "AAIE__8="}, true); // a Wizard in Staff of Extreme Prejudice, Wandering Souls, Mad Scientist robe, Ring of the Pyramid
+        });
+        row.add(Pixel.label("Guild death webhook URL  "));
+        row.add(field);
+        section(hooks, row, 10);
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        buttons.setOpaque(false);
+        buttons.add(save);
+        buttons.add(Box.createHorizontalStrut(8));
+        buttons.add(test);
+        section(hooks, buttons, 8);
+        // 2.30.46: both start ticked, also for people who had them off before (once; unticking afterwards sticks)
+        if (settings.getProperty("deaths.defaults46") == null) {
+            settings.setProperty("deaths.defaults46", "1");
+            settings.setProperty("deaths.on", "true");
+            settings.setProperty("deaths.mine", "true");
+            saveSettings();
+        }
+        Pixel.Check post = new Pixel.Check("Post guildmates' deaths", Boolean.parseBoolean(settings.getProperty("deaths.on", "true")));
+        post.addActionListener(e -> {
+            settings.setProperty("deaths.on", String.valueOf(post.isSelected()));
+            saveSettings();
+        });
+        section(hooks, post, 8);
+        Pixel.Check mine = new Pixel.Check("Post my own deaths (with what killed me)", Boolean.parseBoolean(settings.getProperty("deaths.mine", "true")));
+        mine.addActionListener(e -> {
+            settings.setProperty("deaths.mine", String.valueOf(mine.isSelected()));
+            saveSettings();
+        });
+        section(hooks, mine, 8);
+        Pixel.Check online = new Pixel.Check("Tell my guild's Biscuit when I'm online (for /online)",
+                Boolean.parseBoolean(settings.getProperty("online.on", "true")));
+        online.addActionListener(e -> {
+            settings.setProperty("online.on", String.valueOf(online.isSelected()));
+            saveSettings();
+            if (!online.isSelected()) new Thread(this::sendOffline, "online").start();
+        });
+        section(hooks, online, 8);
+        JLabel onlineNote = Pixel.note("Needs a Biscuit link. Shares your name, class, where you are and guildmates near you.");
+        onlineNote.setForeground(Theme.BLACK);
+        section(hooks, onlineNote, 2);
+    }
+
+    /** The Biscuit link to tell who's on (deaths, bags or badges, whichever is a Biscuit link), or null. */
+    private String onlineUrl() {
+        for (String u : new String[]{settings.getProperty("deaths.url", ""), settings.getProperty("webhook.url", ""), settings.getProperty("badges.url", "")}) {
+            String o = GuildOnline.urlFor(u);
+            if (o != null) return o;
+        }
+        return null;
+    }
+
+    /** Names this pup said were online (account -> name), so it can say when they stop. */
+    private final java.util.Map<Account, String> onlineSaid = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** About once a minute: tells Biscuit who's playing on each account, and who's stopped. */
+    private void sendOnline() {
+        if (!Boolean.parseBoolean(settings.getProperty("online.on", "true"))) return;
+        String url = onlineUrl();
+        if (url == null) return;
+        for (Account a : accounts) {
+            String report = GuildOnline.report(a);
+            String said = onlineSaid.get(a);
+            if (report != null) {
+                if (GuildOnline.send(url, report) / 100 == 2) onlineSaid.put(a, a.me.myName());
+                if (said != null && !said.equalsIgnoreCase(a.me.myName())) GuildOnline.send(url, GuildOnline.offline(said));
+            } else if (said != null) {
+                GuildOnline.send(url, GuildOnline.offline(said));
+                onlineSaid.remove(a);
+            }
+        }
+    }
+
+    /** Says everyone's gone (when the box is unticked or the pup closes). */
+    private void sendOffline() {
+        String url = onlineUrl();
+        if (url != null) for (String name : onlineSaid.values()) GuildOnline.send(url, GuildOnline.offline(name));
+        onlineSaid.clear();
+    }
+
+    /** Where guild deaths go: their own webhook, or the bag one. */
+    private String deathUrl() {
+        String u = settings.getProperty("deaths.url", "").trim();
+        return DiscordWebhook.forKind(DiscordWebhook.isValidUrl(u) ? u : settings.getProperty("webhook.url", ""), "deaths");
+    }
+
+    /** A guildmate died near you: the diary, and a live post. */
+    /** Deaths already posted from this pup (name -> when), so the notice and the gravestone don't both post. */
+    private final java.util.Map<String, Long> deathsPosted = new java.util.HashMap<>();
+
+    /** True the first time this death is seen (in the last few minutes). */
+    private boolean firstDeath(String name) {
+        synchronized (deathsPosted) {
+            long now = System.currentTimeMillis();
+            deathsPosted.values().removeIf(t -> now - t > 90_000); // the same person can die again soon after, on a new character
+            return deathsPosted.putIfAbsent(name.toLowerCase(java.util.Locale.ROOT), now) == null;
+        }
+    }
+
+    /** The game's death notice: the main way guild deaths are found (it comes from anywhere, with the killer). */
+    private void onDeathNotice(Account a, DeathNotice n) {
+        MeTracker.Thing t = a.players.find(n.name);
+        // in view: if they're not in your guild, it's not a guild death
+        String mine = a.me.myGuild();
+        if (t != null && !mine.isEmpty() && !mine.equalsIgnoreCase(t.s(packets.data.enums.StatType.GUILD_NAME_STAT).trim())) return;
+        if (!firstDeath(n.name)) return;
+        String cls = t == null ? "" : AboutMe.objectName(t.objectType, "");
+        int fame = t == null ? -1 : t.i(packets.data.enums.StatType.CURR_FAME_STAT, -1);
+        String map = t == null ? "" : a.visitMap();
+        String where = map == null || map.isEmpty() ? "" : RunLog.label(map);
+        log("*howls softly* " + n.name + (cls.isEmpty() ? "" : " (" + cls + ")") + " from your guild died" + (n.level > 0 ? " at level " + n.level : "")
+                + (n.killer.isEmpty() ? "" : ", killed by " + n.killer) + (where.isEmpty() ? "" : " in " + where) + ".");
+        if (!Boolean.parseBoolean(settings.getProperty("deaths.on", "true"))) return;
+        String url = deathUrl();
+        if (!DiscordWebhook.isValidUrl(url)) return;
+        int[] gear = {-1, -1, -1, -1};
+        String[] data = null;
+        if (t != null) {
+            gear = gearOf(t);
+            String raw = t.s(packets.data.enums.StatType.UNIQUE_DATA_STRING);
+            if (!raw.isEmpty()) data = raw.split(",", -1);
+        }
+        int level = n.level > 0 ? n.level : t == null ? -1 : t.i(packets.data.enums.StatType.LEVEL_STAT, -1);
+        postDeath(url, n.name, t == null ? -1 : t.objectType, level, fame, -1, n.killer, "", "", gear, data, false);
+    }
+
+    private static int[] gearOf(MeTracker.Thing t) {
+        packets.data.enums.StatType[] slots = {packets.data.enums.StatType.INVENTORY_0_STAT, packets.data.enums.StatType.INVENTORY_1_STAT, packets.data.enums.StatType.INVENTORY_2_STAT, packets.data.enums.StatType.INVENTORY_3_STAT};
+        int[] gear = new int[4];
+        for (int k = 0; k < 4; k++) gear[k] = t.i(slots[k], -1);
+        return gear;
+    }
+
+    /** A gravestone where a guildmate stood: only used if the game's notice doesn't come (it usually comes first). */
+    private void onGuildDeath(Account a, PlayersTracker.Gone g, String map) {
+        // give the notice a few seconds: it has the killer
+        javax.swing.Timer later = new javax.swing.Timer(5000, e -> {
+            if (firstDeath(g.name)) guildDeathFromGrave(a, g, map);
+        });
+        later.setRepeats(false);
+        later.start();
+    }
+
+    private void guildDeathFromGrave(Account a, PlayersTracker.Gone g, String map) {
+        MeTracker.Thing t = g.thing;
+        String cls = AboutMe.objectName(t.objectType, "");
+        int level = t.i(packets.data.enums.StatType.LEVEL_STAT, -1), fame = t.i(packets.data.enums.StatType.CURR_FAME_STAT, -1);
+        String where = map.isEmpty() ? "" : RunLog.label(map);
+        log("*howls softly* " + g.name + (cls.isEmpty() ? "" : " (" + cls + ")") + " from your guild died" + (where.isEmpty() ? "" : " in " + where) + ".");
+        if (!Boolean.parseBoolean(settings.getProperty("deaths.on", "true"))) return;
+        String url = deathUrl();
+        if (!DiscordWebhook.isValidUrl(url)) return;
+        int[] gear = new int[4];
+        packets.data.enums.StatType[] slots = {packets.data.enums.StatType.INVENTORY_0_STAT, packets.data.enums.StatType.INVENTORY_1_STAT, packets.data.enums.StatType.INVENTORY_2_STAT, packets.data.enums.StatType.INVENTORY_3_STAT};
+        for (int k = 0; k < 4; k++) gear[k] = t.i(slots[k], -1);
+        String[] data = null;
+        String raw = t.s(packets.data.enums.StatType.UNIQUE_DATA_STRING);
+        if (!raw.isEmpty()) data = raw.split(",", -1);
+        postDeath(url, g.name, t.objectType, level, fame, -1, "", "", "", gear, data, false);
+    }
+
+    /** One of your own characters died: posted with what killed it and the fame it got. */
+    private void onMyDeath(Account a, DeathLog.Death d, String gearData) {
+        if (!Boolean.parseBoolean(settings.getProperty("deaths.mine", "true"))) return;
+        String url = deathUrl();
+        if (!DiscordWebhook.isValidUrl(url)) return;
+        int[] gear = new int[4];
+        for (int k = 0; k < 4; k++) gear[k] = d.gear != null && k < d.gear.length ? d.gear[k] : -1;
+        String[] data = gearData == null || gearData.isEmpty() ? null : gearData.split(",", -1);
+        String name = d.name == null || d.name.isEmpty() ? a.me.myName() : d.name;
+        int[] max = ClassMax.of(d.classType);
+        String stats = "";
+        if (max != null && d.stats != null && d.stats.length == 8 && d.stats[0] >= 0) {
+            int maxed = 0;
+            for (int k = 0; k < 8; k++) if (max[k] > 0 && d.stats[k] >= max[k]) maxed++;
+            stats = maxed + "/8";
+        }
+        postDeath(url, name.isEmpty() ? "Your character" : name, d.classType, d.level, d.baseFame, d.totalFame, d.killedBy, stats,
+                d.lastHits == null ? "" : d.lastHits, gear, data, false);
+    }
+
+    /** Biscuit's comfort notes (the same ones its graveyard posts use when its AI line isn't available). */
+    private static final String[] COMFORT = {"*puts head on your lap* It's okay... you'll get 'em next time \uD83E\uDD7A",
+            "*lies down next to you and sighs* \uD83D\uDC3E", "*brings you your favourite toy* \uD83E\uDDF8 Feel better?",
+            "*gentle boop* You did your best \uD83D\uDC3D", "*curls up against you and stays very still* \uD83D\uDC9B",
+            "*sits beside you quietly* I'm here \uD83D\uDC15", "*tiny whine* ...pats? \uD83D\uDC3E",
+            "*licks your hand* Rest in pieces, little hero... \uD83E\uDD79", "*wags tail very gently* Next run will be better!! \uD83D\uDCAA",
+            "*pushes a stick toward you* Wanna play something else? \uD83C\uDF33"};
+    private static final String[] COMFORT_BIG = {"*sits very still and salutes* That was a REALLY good run... \uD83E\uDD79",
+            "*howls softly* Awoooo... what a legend \uD83D\uDC3A", "*puts a flower on the grave* \uD83C\uDF3C What a run...",
+            "*lowers head respectfully* So much fame... \uD83E\uDD7A\uD83D\uDC9B"};
+
+    /** A death post laid out like Biscuit's graveyard posts: the text, then the character and its gear on a card. */
+    private void postDeath(String url, String name, int classType, int level, int baseFame, int totalFame, String killer, String stats,
+                           String lastHits, int[] gear, String[] data, boolean test) {
+        java.util.List<ItemInfo> items = new java.util.ArrayList<>();
+        for (int k = 0; k < gear.length; k++) {
+            if (gear[k] <= 0) continue;
+            java.util.List<Integer> slots = Enchant.slots(data != null && k < data.length ? data[k] : null);
+            Enchant en = slots != null && !slots.isEmpty() && slots.size() <= 4 ? Enchant.values()[slots.size()] : Enchant.NONE;
+            items.add(ItemInfo.of(gear[k]).withEnchant(en));
+        }
+        StringBuilder c = new StringBuilder();
+        if (test) c.append("-# A test post: deaths will look like this.\n");
+        c.append("**Oh no!!** **").append(name).append("** died <t:").append(System.currentTimeMillis() / 1000).append(":R>");
+        if (killer != null && !killer.isEmpty()) c.append("\n**Murdered** by: ").append(killer);
+        if (baseFame >= 0 || totalFame > 0) {
+            c.append("\n");
+            if (baseFame >= 0) c.append("**Base Fame**: ").append(baseFame);
+            if (totalFame > 0) c.append(baseFame >= 0 ? " " : "").append("**Total Fame**: ").append(totalFame);
+        }
+        if (stats != null && !stats.isEmpty()) c.append("\n**Stats**: ").append(stats);
+        if (lastHits != null && !lastHits.isEmpty()) c.append("\n**Last hits**: ").append(lastHits);
+        String[] lines = totalFame >= 5000 ? COMFORT_BIG : COMFORT;
+        c.append("\n-# ").append(lines[new java.util.Random().nextInt(lines.length)]);
+        byte[] pic = LootImage.deathPng(classType, level, items); // the same cards as bag posts, with the character first
+        String json = "{\"username\":\"White Bag Puppy\",\"allowed_mentions\":{\"parse\":[]},\"content\":" + DiscordWebhook.str(c.toString())
+                + (pic != null ? ",\"attachments\":[{\"id\":0,\"filename\":\"death.png\"}]" : "") + "}";
+        // several pups can see the same death: Biscuit posts it once
+        // and keeps the details for /graveyard (what killed them, fame, class)
+        String target = !DiscordWebhook.isBiscuitLink(url) ? url : url + "&key=" + urlEncode(name.toLowerCase(java.util.Locale.ROOT))
+                + "&name=" + urlEncode(name) + (killer == null || killer.isEmpty() ? "" : "&killer=" + urlEncode(killer))
+                + (baseFame >= 0 ? "&fame=" + baseFame : "") + (totalFame > 0 ? "&total=" + totalFame : "")
+                + (classType > 0 ? "&cls=" + urlEncode(AboutMe.objectName(classType, "")) : "") + (level > 0 ? "&lvl=" + level : "")
+                + (test ? "&test=1" : "");
+        webhook.sendJson(target, json, pic != null ? java.util.Collections.singletonMap("death.png", pic) : java.util.Collections.emptyMap(), "death");
+    }
+
+    private static String urlEncode(String s) {
+        try {
+            return java.net.URLEncoder.encode(s, "UTF-8");
+        } catch (Exception e) {
+            return s;
+        }
+    }
+
     /** Where badges go: their own webhook, or the bag one. */
     private String badgeUrl() {
         String u = settings.getProperty("badges.url", "").trim();
-        return DiscordWebhook.isValidUrl(u) ? u : settings.getProperty("webhook.url", "");
+        return DiscordWebhook.forKind(DiscordWebhook.isValidUrl(u) ? u : settings.getProperty("webhook.url", ""), "badges");
     }
 
     private void postBadge(String url, Badges.Badge b, String who, boolean test) {
@@ -381,6 +945,159 @@ public class WhiteBagNotifier {
         });
     }
 
+    /** Settings > Accounts: move old data into the account you're playing (when the game gives it a new ID). */
+    private void buildAccountMerge(JPanel page) {
+        section(page, new Pixel.Heading("accounts", 2), 26);
+        JLabel intro = Pixel.note("<html><div style='width:560px'>Badges, bags or stats gone after a name change or a fresh start? The pup keeps everything "
+                + "under the game's account ID, and sometimes it starts seeing your account under a new one. This finds the old data "
+                + "and moves it into the account you're playing now (a backup is made first).</div></html>");
+        section(page, intro, 6);
+        Pixel.Button find = new Pixel.Button("Find missing badges and data...", false);
+        find.addActionListener(e -> mergeAccounts());
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        row.setOpaque(false);
+        row.add(find);
+        section(page, row, 10);
+    }
+
+    private void mergeAccounts() {
+        // the account you're playing, or else the one the pup saw most recently (no need to be in game)
+        String now = selected == null ? null : selected.key();
+        for (Account a : accounts) if (now == null && a.key() != null) now = a.key();
+        java.util.List<AccountMerge.Found> all = AccountMerge.accounts();
+        if (now != null) {
+            boolean listed = false;
+            for (AccountMerge.Found f : all) if (f.key.equals(now)) listed = true;
+            if (!listed) {
+                AccountMerge.Found f = new AccountMerge.Found(now);
+                f.name = selected != null ? selected.label() : "";
+                all.add(0, f);
+            }
+        }
+        if (all.size() < 2) {
+            JOptionPane.showMessageDialog(frame, all.isEmpty() ? "The pup hasn't saved any account data yet."
+                            : "There's only one account in the saved data:\n" + all.get(0).label()
+                            + "\n\nIf the badges are under a new ID, play for a minute with the pup watching (so it sees the new one), then try again.",
+                    "Accounts", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        String[] labels = new String[all.size()];
+        int into = 0, from = -1;
+        for (int i = 0; i < labels.length; i++) {
+            AccountMerge.Found f = all.get(i);
+            labels[i] = f.label() + (f.key.equals(now) ? "  [playing now]" : "") + "  #" + Integer.toHexString(f.key.hashCode());
+            if (f.key.equals(now)) into = i;
+        }
+        if (selected == null || selected.key() == null) { // not in game: the new account is the one with the fewest badges
+            for (int i = 0; i < all.size(); i++) if (all.get(i).badges < all.get(into).badges) into = i;
+        }
+        for (int i = 0; i < all.size(); i++) // the old data: the account with the most badges that isn't the target
+            if (i != into && (from < 0 || all.get(i).badges > all.get(from).badges)) from = i;
+        JComboBox<String> fromBox = new JComboBox<>(labels), intoBox = new JComboBox<>(labels);
+        fromBox.setSelectedIndex(from);
+        intoBox.setSelectedIndex(into);
+        JPanel box = new JPanel(new GridLayout(0, 1, 0, 6));
+        box.add(new JLabel("Move the data from (the old one, with your badges):"));
+        box.add(fromBox);
+        box.add(new JLabel("Into (the account you play now):"));
+        box.add(intoBox);
+        box.add(new JLabel("<html><div style='width:460px'>Only do this if both are really yours (the same game account). "
+                + "A backup is made first. Afterwards close and reopen the pup.</div></html>"));
+        int ok = JOptionPane.showConfirmDialog(frame, box, "Move account data", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (ok != JOptionPane.OK_OPTION) return;
+        AccountMerge.Found f = all.get(fromBox.getSelectedIndex()), to = all.get(intoBox.getSelectedIndex());
+        if (f == to) {
+            JOptionPane.showMessageDialog(frame, "Pick two different accounts.", "Accounts", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        try {
+            int n = AccountMerge.move(f.key, to.key, settings);
+            saveSettings();
+            log("*happy wiggle* moved " + n + " saved lines (" + f.label() + ") into " + to.label() + ". Close and reopen the pup to see them.");
+            JOptionPane.showMessageDialog(frame, "Done! Moved " + n + " saved lines.\nClose and reopen the pup to see the badges and stats.", "Accounts", JOptionPane.INFORMATION_MESSAGE);
+        } catch (Exception ex) {
+            log("*whimper* couldn't move the account data: " + ex.getMessage() + ". Nothing is lost: there's a backup in the backups folder.");
+        }
+    }
+
+
+    /** Discord status (Rich Presence): on/off, what it shows, and the application ID. */
+    private void buildDiscordStatus(JPanel page) {
+        section(page, new Pixel.Heading("discord status", 2), 26);
+        JLabel intro = Pixel.note("Shows \"Playing White Bag Puppy\" on your Discord profile with what you're doing. Needs the Discord app open on this PC.");
+        intro.setForeground(Theme.BLACK);
+        section(page, intro, 6);
+        Pixel.Check on = new Pixel.Check("Show my status on Discord", Boolean.parseBoolean(settings.getProperty("presence.on", "false")));
+        JLabel state = Pixel.note("");
+        JPanel parts = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        parts.setOpaque(false);
+        String[][] what = {{"name", "Name"}, {"class", "Class"}, {"fame", "Fame"}, {"place", "Dungeon"}, {"time", "Time there"},
+                {"party", "Party"}};
+        for (String[] w : what) {
+            Pixel.Check c = new Pixel.Check(w[1], !"false".equals(settings.getProperty("presence." + w[0], "true")));
+            c.addActionListener(e -> {
+                settings.setProperty("presence." + w[0], String.valueOf(c.isSelected()));
+                saveSettings();
+                DiscordPresence.poke();
+            });
+            parts.add(c);
+            parts.add(Box.createHorizontalStrut(6));
+        }
+        on.addActionListener(e -> {
+            settings.setProperty("presence.on", String.valueOf(on.isSelected()));
+            saveSettings();
+            DiscordPresence.poke();
+            log(on.isSelected() ? "*wags* showing what you're up to on Discord." : "*nods* not showing anything on Discord any more.");
+        });
+        on.setAlignmentX(Component.LEFT_ALIGNMENT);
+        section(page, on, 6);
+        section(page, parts, 4);
+        // the application ID: built in once there is one, but changeable (Discord shows that application's name)
+        JPanel idRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        idRow.setOpaque(false);
+        JTextField id = Pixel.field(settings.getProperty("presence.appId", ""), 22,
+                DiscordPresence.DEFAULT_APP_ID.isEmpty() ? "Discord application ID" : "Discord application ID (optional)");
+        Pixel.Button saveId = new Pixel.Button("Save", false);
+        saveId.addActionListener(e -> {
+            settings.setProperty("presence.appId", id.getText().replaceAll("[^0-9]", ""));
+            id.setText(settings.getProperty("presence.appId"));
+            saveSettings();
+            DiscordPresence.poke();
+        });
+        idRow.add(id);
+        idRow.add(Box.createHorizontalStrut(8));
+        idRow.add(saveId);
+        section(page, idRow, 6);
+        section(page, state, 4);
+        new javax.swing.Timer(2000, e -> state.setText("Status: " + DiscordPresence.status())).start();
+        DiscordPresence.onStatus = st -> SwingUtilities.invokeLater(() -> log("*ears up* Discord status: " + st));
+        DiscordPresence.start(() -> {
+            // the account that's playing right now (the one ticking most recently), else the one you're looking at
+            Account a = selected;
+            try {
+                for (Account x : accounts) if (a == null || x.lastTick > a.lastTick) a = x;
+            } catch (Exception ignored) {
+            }
+            DiscordPresence.Info in = new DiscordPresence.Info();
+            if (a == null) return in;
+            long quiet = System.currentTimeMillis() - a.lastTick;
+            in.inGame = quiet < 30_000 && !a.me.myName().isEmpty();
+            in.why = a.lastTick == 0 ? "no game ticks seen yet"
+                    : quiet >= 30_000 ? "no game ticks for " + quiet / 1000 + "s" : a.me.myName().isEmpty() ? "no character name yet" : "";
+            in.name = a.me.myName();
+            int cls = a.me.myClassType();
+            in.cls = cls > 0 ? AboutMe.objectName(cls, "") : "";
+            in.fame = a.me.fameNow();
+            String map = a.visitMap();
+            in.map = map == null ? "" : RunLog.label(map);
+            in.since = a.visitStart();
+            in.partySize = a.players.partySize();
+            in.partyMax = a.players.partyMax();
+            in.partyName = a.players.partyName();
+            return in;
+        }, (k, f) -> settings.getProperty(k, f));
+    }
+
     /** The Backups section on Home: back up now, restore, open the folder, and the weekly backup switch. */
     private void buildBackups(JPanel home) {
         section(home, new Pixel.Heading("backups", 2), 26);
@@ -436,6 +1153,11 @@ public class WhiteBagNotifier {
         JPanel checkRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         checkRow.setOpaque(false);
         checkRow.add(checkNow);
+        checkRow.add(Box.createHorizontalStrut(8));
+        Pixel.Button reread = new Pixel.Button("Re-read game files", false);
+        reread.setToolTipText("If items show as a ? or Item #12345 after a game update, this reads the game's files again");
+        reread.addActionListener(e -> rereadGameFiles(true, ""));
+        checkRow.add(reread);
         section(home, checkRow, 6);
         Pixel.Check dark = new Pixel.Check("Dark mode (the pup wears pyjamas)", Theme.DARK);
         dark.addActionListener(e -> {
@@ -463,7 +1185,37 @@ public class WhiteBagNotifier {
             log("*curls up* overlay hidden. Turn it back on under Home > Mini overlay.");
         });
         section(home, overlayBox, 2);
+        Pixel.Check widgetsBox = new Pixel.Check("Widget bar under the header (gold, fame, rank, dust, forge; right-click it to choose)",
+                Boolean.parseBoolean(settings.getProperty("widgets.on", "true")));
+        widgetsBox.addActionListener(e -> {
+            settings.setProperty("widgets.on", String.valueOf(widgetsBox.isSelected()));
+            saveSettings();
+            if (widgetBar != null) widgetBar.refresh();
+        });
         section(home, overlayDungeons, 2);
+        Pixel.Check overlayDps = new Pixel.Check("Show live DPS (top 3) on the overlay", overlay.showing("dps"));
+        overlayDps.addActionListener(e -> overlay.show("dps", overlayDps.isSelected()));
+        overlay.onRowChanged = (id, on) -> { if (id.equals("dps") && overlayDps.isSelected() != on) overlayDps.setSelected(on); };
+        section(home, overlayDps, 2);
+        Pixel.Check overlayFoldedDps = new Pixel.Check("Show my name, damage and DPS on the folded overlay", overlay.foldedDps());
+        overlayFoldedDps.addActionListener(e -> overlay.setFoldedDps(overlayFoldedDps.isSelected()));
+        overlay.onFoldedDpsChanged = on -> { if (overlayFoldedDps.isSelected() != on) overlayFoldedDps.setSelected(on); };
+        section(home, overlayFoldedDps, 2);
+        Pixel.Check dangerBox = new Pixel.Check("Danger warnings (a warning sound and the overlay flashes red when something that killed you before shows up)",
+                !"false".equals(settings.getProperty("danger.on", "true")));
+        dangerBox.addActionListener(e -> {
+            settings.setProperty("danger.on", String.valueOf(dangerBox.isSelected()));
+            saveSettings();
+        });
+        section(home, dangerBox, 2);
+        Pixel.Check shinyBox = new Pixel.Check("Sparkle sound when a shiny item drops", !"false".equals(settings.getProperty("shiny.sound", "true")));
+        shinyBox.addActionListener(e -> {
+            settings.setProperty("shiny.sound", String.valueOf(shinyBox.isSelected()));
+            saveSettings();
+            if (shinyBox.isSelected()) Squeak.playShiny();
+        });
+        section(home, shinyBox, 2);
+        section(home, widgetsBox, 2);
         // accent colour (restarts, like dark mode)
         section(home, Pixel.label("Accent colour"), 12);
         JPanel accents = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
@@ -612,7 +1364,7 @@ public class WhiteBagNotifier {
     private void shareCollection(byte[] png, String who) {
         String url = settings.getProperty("webhook.url", "");
         if (!DiscordWebhook.isValidUrl(url)) {
-            log("*tilts head* paste your webhook URL on the Webhooks tab first, then I can share your collection.");
+            log("*tilts head* paste your webhook URL on Home > Settings first, then I can share your collection.");
             return;
         }
         String title = "\uD83D\uDCD6 " + (who.isEmpty() ? "My" : who + "'s") + " collection";
@@ -627,8 +1379,9 @@ public class WhiteBagNotifier {
 
     /** Sends each account's totals to the bot for the friends leaderboard (when joined and the recap link is a bot link). */
     private void sendLeaderboard(boolean force) {
-        if (!"true".equals(settings.getProperty("leaderboard.join"))) return;
+        if (!Boolean.parseBoolean(settings.getProperty("leaderboard.join", "true"))) return;
         String u = settings.getProperty("recap.url", "");
+        if (!force && !Recap.isBotUrl(u)) return; // ticked from the start, but nothing to send to until there's a bot recap link
         for (Account a : accounts) {
             if (a.key() == null) continue;
             String problem = Leaderboard.send(u, a.key(), a::isMine, force);
@@ -652,6 +1405,7 @@ public class WhiteBagNotifier {
                 if (Recap.isDue(settings)) for (Account a : accounts) a.me.checkpointPlay();
                 boolean changed = Recap.tick(settings, (json, files, what) -> webhook.sendJson(u, json, files, what), this::log);
                 if (leaderboardTick++ % 10 == 0) sendLeaderboard(false);
+                sendOnline();
                 for (Account a : accounts) a.noteCharacterItems();
                 if (leaderboardTick % 360 == 0) SwingUtilities.invokeLater(this::checkForUpdate); // every 6 hours
                 if (Backup.weeklyDue(settings)) {
@@ -679,6 +1433,16 @@ public class WhiteBagNotifier {
                 }
             }
             installPendingOnExit(); // a downloaded update goes in now, ready for next time
+            if (!onlineSaid.isEmpty()) {
+                // tell Biscuit you've gone (it would notice in 5 minutes anyway), without holding up closing for long
+                Thread bye = new Thread(this::sendOffline, "online-bye");
+                bye.setDaemon(true);
+                bye.start();
+                try {
+                    bye.join(3000);
+                } catch (InterruptedException ignored) {
+                }
+            }
         }, "save-on-exit"));
     }
 
@@ -844,8 +1608,66 @@ public class WhiteBagNotifier {
                     System.out.println("Update check: " + problem);
                     // say so in the diary, so a stuck update isn't a mystery
                     SwingUtilities.invokeLater(() -> log("*tilts head* couldn't check GitHub for updates: " + problem
-                            + (byHand ? "" : ". I'll try again later, or press Check for updates on Home.")));
+                            + (byHand ? "" : ". I'll try again later, or press Check for updates on Home > Settings.")));
                 });
+    }
+
+    /**
+     * Says in the diary which shinies the game files list more than once (merged into one entry on the Collection
+     * page), each with its dungeons. Only when that list changes, so it doesn't repeat every time the pup opens.
+     */
+    private void reportShinyMerges() {
+        try {
+            java.util.List<String> merged = LootBook.shinyMerges();
+            String sig = String.valueOf(String.join("|", merged).hashCode());
+            if (merged.isEmpty() || sig.equals(settings.getProperty("shiny.mergesLogged"))) return;
+            settings.setProperty("shiny.mergesLogged", sig);
+            saveSettings();
+            log("*sniffs* the game files list " + merged.size() + (merged.size() == 1 ? " shiny" : " shinies")
+                    + " more than once, so each is one entry in Loot > Collection now: " + String.join("; ", merged) + ".");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private volatile boolean rereading;
+    private volatile long unknownCheckAt;
+
+    /**
+     * Reads the game files again in the background, if the game has updated (or always, by hand), then refreshes every
+     * page so new items get their names and pictures. Also checked every few minutes, and when an unknown item turns up.
+     */
+    private void rereadGameFiles(boolean byHand, String why) {
+        if (rereading) return;
+        rereading = true;
+        Thread t = new Thread(() -> {
+            try {
+                if (!byHand && !AssetExtractor.needsUpdate(Version.VERSION)) return;
+                java.util.Set<Integer> itemsBefore = NewItems.snapshot();
+                log(byHand ? "*sniff sniff* reading the game files again..." : "*perks up* " + why + ", reading the game's new files...");
+                if (!AssetExtractor.updateQuietly(Version.VERSION, byHand)) {
+                    log("*tilts head* couldn't find the game's files to read. If the game is somewhere unusual, start the pup with --path.");
+                    return;
+                }
+                IdToAsset.reloadAssets();
+                LootImage.gameSpritesReady = new java.io.File("assets/flatbuffer/spritesheetf").exists();
+                if (LootImage.gameSpritesReady) LootImage.reloadSprites();
+                ItemXml.reset();
+                DungeonMods.reload();
+                LootBook.reset();
+                Titles.reset();
+                SwingUtilities.invokeLater(() -> { for (Account a : accounts) a.refreshPages(); });
+                log("*happy wiggle* got the new game files: new items have their names and pictures now.");
+                String news = NewItems.report(NewItems.since(itemsBefore));
+                if (news != null) log(news);
+                SwingUtilities.invokeLater(this::reportShinyMerges); // after the settings are loaded
+            } catch (Throwable e) {
+                log("*whimper* couldn't read the new game files (" + e.getClass().getSimpleName() + ": " + e.getMessage() + "). Try Re-read game files on Home > Settings after closing the game.");
+            } finally {
+                rereading = false;
+            }
+        }, "reread-game-files");
+        t.setDaemon(true);
+        t.start();
     }
 
     private void loadAssets() {
@@ -863,17 +1685,43 @@ public class WhiteBagNotifier {
                     + "or allow Java under Windows Security > Virus & threat protection > Ransomware protection > Controlled folder access.");
         }
         try {
-            AssetExtractor.checkForExtraction(Version.VERSION);
+            // the game updated: read its files again by itself (asking only when the game can't be found)
+            boolean quiet = false;
+            java.util.Set<Integer> itemsBefore = AssetExtractor.needsUpdate(Version.VERSION) ? NewItems.snapshot() : null;
+            try {
+                if (AssetExtractor.needsUpdate(Version.VERSION)) {
+                    log("*sniff sniff* the game has updated, reading its new files (new items get their names and pictures)...");
+                    quiet = AssetExtractor.updateQuietly(Version.VERSION, false);
+                }
+            } catch (Throwable e) {
+                System.out.println("Quiet asset update failed: " + e);
+            }
+            if (!quiet) AssetExtractor.checkForExtraction(Version.VERSION);
             IdToAsset.reloadAssets();
             LootImage.gameSpritesReady = new java.io.File("assets/flatbuffer/spritesheetf").exists();
             // pages drawn before the game files were read showed item numbers: read again and redraw
             ItemXml.reset();
+            DungeonMods.reload();
             LootBook.reset();
             Titles.reset();
             for (Account a : accounts) a.refreshPages();
             Badges.ready = true;
             if (!LootImage.gameSpritesReady) log("*tilts head* found item names but no sprite sheets, so posts will be text only.");
             log("*sniffs the game files* ...got all the item names and pictures!");
+            if (itemsBefore != null) {
+                String news = NewItems.report(NewItems.since(itemsBefore));
+                if (news != null) log(news);
+            }
+            SwingUtilities.invokeLater(this::reportShinyMerges); // after the settings are loaded
+            // the game can update while the pup is open: look again every 5 minutes, and soon after an unknown item turns up
+            ItemInfo.onUnknown = id -> {
+                long now = System.currentTimeMillis();
+                if (now - unknownCheckAt < 120_000) return;
+                unknownCheckAt = now;
+                rereadGameFiles(false, "found an item I don't know (#" + id + ") and the game has updated");
+            };
+            javax.swing.Timer watchGame = new javax.swing.Timer(5 * 60_000, e -> rereadGameFiles(false, "the game has updated"));
+            watchGame.start();
         } catch (Throwable e) {
             Badges.ready = true;
             log("*whimper* couldn't read the game files (" + e.getClass().getSimpleName() + "), so posts will show item numbers instead of names and pictures. "
@@ -883,18 +1731,44 @@ public class WhiteBagNotifier {
 
     private void buildGui() {
         loadSettings();
+        upeMini.start();
+        GroupPage.prefs = settings; // the pages remember where you were
+        GroupPage.save = this::saveSettings;
         Squeak.prepareSoundFolder();
         // Each game client gets its own connection; the router sends its packets to the right account.
         router = new AccountRouter(accounts, this::addAccount);
+        AccountRouter.log = this::log;
+        BadgesPage.diagnose = () -> {
+            StringBuilder sb = new StringBuilder("*sniffs around* accounts: ");
+            for (Account x : accounts) sb.append("page ").append(x.index + 1).append(x == selected ? " (showing)" : "")
+                    .append(x.claimed() ? " known #" + Integer.toHexString(x.key().hashCode()) : " unknown").append(", ");
+            java.util.Set<String> saved = AccountRouter.knownKeys.get();
+            sb.append(saved.size()).append(" saved (");
+            int i = 0;
+            for (String k : saved) sb.append(i++ > 0 ? " " : "").append("#").append(Integer.toHexString(k.hashCode()));
+            sb.append("). One account mode ").append(AccountRouter.singleAccount ? "on" : "off").append(". ").append(router == null ? "not watching" : router.describe()).append(".");
+            log(sb.toString());
+        };
+        AccountRouter.knownKeys = () -> {
+            java.util.Set<String> keys = new java.util.HashSet<>();
+            for (Badges.Unlock u : Badges.unlocks()) if (!u.account.isEmpty()) keys.add(u.account);
+            return keys;
+        };
         packets.packetcapture.ConnectionRouter.setHandler(router);
         packets.packetcapture.ConnectionRouter.setClosedHandler(router);
         // realm events on every server from RealmStock (only if turned on in the Events tab)
         RealmStockFeed.onPing = e -> {
             if (RealmStockFeed.sound()) Squeak.playEvent(e.name, RealmStockFeed.soundNames(e)[1]);
             String d = RealmStockFeed.details(e);
-            log("*ears up* [RealmStock] " + RealmStockFeed.headline(e) + " in " + RealmStockFeed.where(e) + (d.isEmpty() ? "" : " (" + d.replace("  ·  ", ", ") + ")"));
+            log("*ears up* [" + e.source + "] " + RealmStockFeed.headline(e) + " in " + RealmStockFeed.where(e) + (d.isEmpty() ? "" : " (" + d.replace("  ·  ", ", ") + ")"));
         };
         RealmStockFeed.start();
+        // realm bosses, invasion wormholes and closing realms on every server from atti.network (ticked in the Realms tab)
+        AttiFeed.onPing = s -> {
+            if (AttiFeed.sound()) Squeak.playEvent(s.name, s.kind == AttiFeed.Kind.CLOSING ? "realm-closed" : "event");
+            log("*ears up* [atti] " + s.name + " in " + s.where() + (s.detail.isEmpty() ? "" : " (" + s.detail.replace("  ·  ", ", ") + ")")
+                    + (s.players >= 0 ? ", " + s.players + " players" : ""));
+        };
         TcpStreamErrorHandler.INSTANCE.setErrorMessageHandler((error, dump) -> log("*whimper* sniffer error: " + error));
         TcpStreamErrorHandler.INSTANCE.setErrorStopHandler(() -> SwingUtilities.invokeLater(this::stopSniffer));
 
@@ -991,12 +1865,35 @@ public class WhiteBagNotifier {
         header.setLastWhite(lastDrop("white"));
         root.add(header);
         root.add(Box.createVerticalStrut(6));
+        widgetBar = new WidgetBar(() -> selected == null ? null : selected.me, () -> selected == null ? null : selected.mods, new WidgetBar.Settings() {
+            @Override public String get(String key, String fallback) { return settings.getProperty(key, fallback); }
+            @Override public void set(String key, String value) { settings.setProperty(key, value); saveSettings(); }
+        });
+        widgetBar.setAlignmentX(Component.LEFT_ALIGNMENT);
+        // the chips, with the search box at the end of the row
+        JPanel chipRow = new JPanel(new BorderLayout(10, 0)) {
+            @Override
+            public Dimension getMaximumSize() {
+                return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
+            }
+        };
+        chipRow.setOpaque(false);
+        chipRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        chipRow.add(widgetBar, BorderLayout.CENTER);
+        JTextField find = Pixel.field("", 18, "Find an item, dungeon or player");
+        find.setToolTipText("Press Enter: bags you've had with it, the collection, or the player");
+        find.addActionListener(e -> findThing(find.getText()));
+        JPanel findBox = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        findBox.setOpaque(false);
+        findBox.add(find);
+        chipRow.add(findBox, BorderLayout.EAST);
+        root.add(chipRow);
 
         // Folder tabs on top of one white sheet; each tab shows a page on the sheet.
         pages = new CardLayout();
         sheet = new Pixel.Sheet(pages);
         sheet.setAlignmentX(Component.LEFT_ALIGNMENT);
-        tabNames = new String[]{"home", "loot", "fights", "me", "chat", "events", "puzzle", "webhooks"};
+        tabNames = new String[]{"home", "loot", "fights", "me", "chat", "UPE"};
         tabs = new Pixel.Tabs(tabNames, i -> showPage());
         // account switcher (only shown once a second game account turns up)
         accountBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
@@ -1012,12 +1909,11 @@ public class WhiteBagNotifier {
         JPanel home = new JPanel();
         home.setLayout(new BoxLayout(home, BoxLayout.Y_AXIS));
         home.setOpaque(false);
-        sheet.add(home, "home");
-        // every Discord webhook in one place: bag posts, recaps and badges
+        // Settings: every Discord webhook (bag posts, recaps and badges), then backups, updates and how the pup looks
         JPanel hooks = new JPanel();
         hooks.setLayout(new BoxLayout(hooks, BoxLayout.Y_AXIS));
         hooks.setOpaque(false);
-        sheet.add(hooks, "webhooks");
+        sheet.add(new GroupPage(new String[]{"Watch", "Settings"}, home, hooks), "home");
         selected = addAccount(); // the first account's pages, ready before any game is seen
 
         // ---- update notice (hidden until GitHub has a newer release)
@@ -1037,7 +1933,7 @@ public class WhiteBagNotifier {
         section(home, updateButton, 0);
 
         // ---- pointer to the Webhooks tab
-        JLabel hookNote = Pixel.note("Discord webhooks (bag posts, recaps and badges) are on the Webhooks tab.");
+        JLabel hookNote = Pixel.note("Discord webhooks (bag posts, recaps and badges), backups, the overlay and how the pup looks are on Settings, just above.");
         hookNote.setForeground(Theme.BLACK);
         section(home, hookNote, 0);
 
@@ -1048,7 +1944,7 @@ public class WhiteBagNotifier {
         discord.setOpaque(false);
         GridBagConstraints c = new GridBagConstraints();
         c.anchor = GridBagConstraints.WEST;
-        urlField = Pixel.field(settings.getProperty("webhook.url", ""), 34, "https://discord.com/api/webhooks/...");
+        urlField = Pixel.field(settings.getProperty("webhook.url", ""), 34, "a Discord webhook, or your Biscuit link from /pup link");
         pingField = Pixel.field(settings.getProperty("ping.userId", ""), 16, "e.g. 1234567890");
         pingField.setToolTipText("Discord: Settings > Advanced > Developer Mode, then right-click your name > Copy User ID");
         c.gridx = 0; c.gridy = 0; c.insets = new Insets(0, 0, 8, 14); discord.add(Pixel.label("Webhook URL"), c);
@@ -1190,6 +2086,22 @@ public class WhiteBagNotifier {
         autoStartBox.setAlignmentX(Component.LEFT_ALIGNMENT);
         soundBox.setAlignmentX(Component.LEFT_ALIGNMENT);
         options.add(autoStartBox);
+        if (WinStartup.supported()) {
+            WinStartup.refresh(); // keeps it pointing at this folder if the pup was moved
+            Pixel.Check withWindows = new Pixel.Check("Open White Bag Puppy when Windows starts", WinStartup.isOn());
+            withWindows.setToolTipText("Tick \"Start watching when the app opens\" too, and it starts watching by itself");
+            withWindows.addActionListener(e -> {
+                String err = WinStartup.set(withWindows.isSelected());
+                if (err != null) {
+                    withWindows.setSelected(WinStartup.isOn());
+                    log("*whimper* couldn't change starting with Windows: " + err);
+                } else {
+                    log(withWindows.isSelected() ? "*wags* I'll open by myself when Windows starts." : "*nods* I won't open by myself when Windows starts any more.");
+                }
+            });
+            withWindows.setAlignmentX(Component.LEFT_ALIGNMENT);
+            options.add(withWindows);
+        }
         options.add(soundBox);
         AccountRouter.singleAccount = "true".equals(settings.getProperty("accounts.single"));
         Pixel.Check single = new Pixel.Check("I only play one account", AccountRouter.singleAccount);
@@ -1214,7 +2126,10 @@ public class WhiteBagNotifier {
         controls.add(options);
         section(home, controls, 26);
 
-        buildBackups(home);
+        buildGuildDeathHook(hooks);
+        buildDiscordStatus(hooks);
+        buildBackups(hooks);
+        buildAccountMerge(hooks);
 
         // ---- Diary
         section(home, new Pixel.Heading("pup diary", 2), 26);
@@ -1258,6 +2173,11 @@ public class WhiteBagNotifier {
         frame.setMinimumSize(new Dimension(Math.min(frame.getWidth(), 640), 280));
         frame.setLocationRelativeTo(null);
         root.setFocusable(true);
+        int lastTab = java.util.Arrays.asList(tabNames).indexOf(settings.getProperty("ui.tab", "home"));
+        if (lastTab > 0) {
+            tabs.select(lastTab);
+            showPage();
+        }
         frame.setVisible(true);
         if (overlay != null) overlay.start();
         root.requestFocusInWindow();
@@ -1269,7 +2189,25 @@ public class WhiteBagNotifier {
             log("*tilts head* no background.png in " + new File("").getAbsolutePath() + ", so using the plain colour.");
         }
         log("*wags tail* White Bag Puppy " + UpdateCheck.VERSION + " is awake!");
-        log("*wags tail* hi! paste your webhook URL on the Webhooks tab, send a test post, then press Start watching.");
+        log("*wags tail* hi! paste your webhook URL on Home > Settings, send a test post, then press Start watching.");
+        packets.packetcapture.PacketProcessor.onBadDeath = () -> log("*tilts head* a death message came in that I couldn't fully read (the game may have changed it). Checking it anyway...");
+        int fix = contest.loadFix();
+        if (fix > 0) {
+            log("*happy wiggle* fixed your UPE total with the updated scoring rules: " + fix + (fix == 1 ? " missing point" : " missing points") + " added back. New total: " + contest.total() + " points.");
+            saveSettings();
+        }
+        int joinFix = contest.repairJoinedRun();
+        if (joinFix != 0) {
+            log("*tilts head* UPE: I checked your put-back run again and " + (joinFix > 0 ? "gave back " + joinFix : "took off " + (-joinFix))
+                    + (Math.abs(joinFix) == 1 ? " point" : " points") + ". New total: " + contest.total() + " points.");
+            saveSettings();
+        }
+        int reskinFix = contest.loadReskinFix();
+        if (reskinFix > 0) {
+            log("*tilts head* UPE: reskins now count as their original item, and reskins of tiered gear don't count, so I took "
+                    + reskinFix + (reskinFix == 1 ? " point" : " points") + " off your total. New total: " + contest.total() + " points (same as Biscuit's).");
+            saveSettings();
+        }
         if (autoStartBox.isSelected()) startSniffer();
     }
 
@@ -1360,7 +2298,8 @@ public class WhiteBagNotifier {
         JOptionPane.showMessageDialog(frame,
                 "That doesn't look like a Discord webhook URL.\n\n"
                         + "In Discord: Server Settings > Integrations > Webhooks > New Webhook > Copy Webhook URL.\n"
-                        + "It should start with https://discord.com/api/webhooks/",
+                        + "It should start with https://discord.com/api/webhooks/\n\n"
+                        + "Or type /pup link in Discord and paste the Biscuit link it gives you.",
                 "Webhook URL", JOptionPane.WARNING_MESSAGE);
         return false;
     }
@@ -1379,6 +2318,21 @@ public class WhiteBagNotifier {
         header.setWatching(true);
         status.set(bagsToday == 0 ? "Watching" : foundText(), true);
         log("*sniff sniff* watching for bags. If you're already in game, change area once (the Nexus works) so I can catch up.");
+        // can't see the game after a while? work out why
+        final PacketProcessor watching = processor;
+        final long since = System.currentTimeMillis();
+        Thread check = new Thread(() -> {
+            try {
+                Thread.sleep(45_000);
+            } catch (InterruptedException e) {
+                return;
+            }
+            if (processor != watching || PacketProcessor.lastPacketAt >= since) return;
+            log("*tilts head* I've been watching for 45 seconds and haven't seen the game yet. Checking why...");
+            for (String l : NetCheck.run()) log("*sniff* " + l);
+        }, "net check");
+        check.setDaemon(true);
+        check.start();
     }
 
     private void stopSniffer() {
@@ -1417,6 +2371,8 @@ public class WhiteBagNotifier {
             }
         });
         String url = settings.getProperty("webhook.url", "");
+        // UPE "Contest only": while the contest runs, the normal bag posts take a break (the contest posts carry on)
+        if (contest.on() && contest.charId() >= 0 && "true".equals(settings.getProperty("contest.only"))) url = "";
         int min = minRarity();
         boolean rareEnough = min == 0;
         for (ItemInfo it : drop.items()) {
@@ -1463,7 +2419,7 @@ public class WhiteBagNotifier {
         SwingUtilities.invokeLater(() -> {
             if (account.chatPanel == null) return;
             account.chatPanel.added(line);
-            if (line.kind != ChatLog.Kind.SYSTEM) bumpTab(account, java.util.Arrays.asList(tabNames).indexOf("chat"));
+            if (line.kind == ChatLog.Kind.WHISPER || line.kind == ChatLog.Kind.GUILD || line.kind == ChatLog.Kind.PARTY) bumpTab(account, java.util.Arrays.asList(tabNames).indexOf("chat"));
         });
     }
 
@@ -1474,7 +2430,7 @@ public class WhiteBagNotifier {
         Squeak.playEvent(e.name);
         log((accounts.size() > 1 ? account.prefix() : "") + "*ears up* " + e.name + "!" + (e.map.isEmpty() ? "" : " in " + e.map)
                 + " (" + String.join(", ", e.how) + ")");
-        SwingUtilities.invokeLater(() -> bumpTab(account, java.util.Arrays.asList(tabNames).indexOf("events")));
+        SwingUtilities.invokeLater(() -> bumpTab(account, java.util.Arrays.asList(tabNames).indexOf("chat")));
     }
 
     // ---------------------------------------------------------------- accounts
@@ -1484,25 +2440,30 @@ public class WhiteBagNotifier {
         Account a = new Account(accounts.size(), host);
         Runnable ui = () -> {
             a.buildPanels();
-            for (JComponent page : new JComponent[]{a.bagLog, a.chatPanel, a.dpsPanel, a.aboutPanel, a.vaultPage, a.lootPage, a.bookPage, a.dungeonPage, a.killsPage, a.puzzlePage, a.badgesPage, a.wardrobePage, a.titlesPage, a.eventsPage, a.famePage, a.tradesPage, a.chestPage, a.holidayPage, a.fameBonusPage, a.playersPage}) {
+            for (JComponent page : new JComponent[]{a.bagLog, a.chatPanel, a.dpsPanel, a.aboutPanel, a.questsPanel, a.vaultPage, a.lootPage, a.bookPage, a.dungeonPage, a.killsPage, a.puzzlePage, a.badgesPage, a.wardrobePage, a.titlesPage, a.eventsPage, a.famePage, a.tradesPage, a.chestPage, a.holidayPage, a.fameBonusPage, a.playersPage, a.treasuryPage, a.dpsCalcPage, a.charactersPage, a.lootHistoryPage, a.shinyPage, a.contestPage, a.realmsPage}) {
                 page.putClientProperty("pixel.ownScroll", Boolean.TRUE); // these scroll inside themselves
             }
             // related pages share a tab, with a switch along the top
-            a.lootGroup = new GroupPage(new String[]{"Bag Log", "Stats", "Collection", "Dungeons", "Holidays", "Quest Chests"},
-                    a.bagLog, a.lootPage, a.bookPage, a.dungeonPage, a.holidayPage, a.chestPage);
-            a.fightsGroup = new GroupPage(new String[]{"DPS", "Boss Kills"}, a.dpsPanel, a.killsPage);
+            // related pages share a tab, with a switch along the top (and a second switch for close relatives)
+            GroupPage bags = a.bagsGroup = new GroupPage(new String[]{"This session", "All time"}, a.bagLog, a.lootHistoryPage);
+            GroupPage collection = a.collectionGroup = new GroupPage(new String[]{"Items", "Shinies", "Dungeons", "Holidays", "Quest Chests"},
+                    a.bookPage, a.shinyPage, a.dungeonPage, a.holidayPage, a.chestPage);
+            a.lootGroup = new GroupPage(new String[]{"Bags", "Stats", "Collection"}, bags, a.lootPage, collection);
+            a.fightsGroup = new GroupPage(new String[]{"DPS", "History", "Boss Kills", "DPS Calc", "Puzzle"}, a.dpsPanel, a.fightHistoryPage, a.killsPage, a.dpsCalcPage, a.puzzlePage);
             a.badgesPage.checkNow = () -> checkBadges(a); // opening Badges unlocks anything newly earned
-            a.meGroup = new GroupPage(new String[]{"About Me", "Fame", "Fame Bonuses", "Vault", "Badges", "Wardrobe", "Titles"}, a.aboutPanel, a.famePage, a.fameBonusPage, a.vaultPage, a.badgesPage, a.wardrobePage, a.titlesPage);
-            a.chatGroup = new GroupPage(new String[]{"Chat", "Trades", "Players"}, a.chatPanel, a.tradesPage, a.playersPage);
-            for (JComponent page : new JComponent[]{a.lootGroup, a.fightsGroup, a.meGroup, a.chatGroup}) {
+            GroupPage chars = new GroupPage(new String[]{"This character", "All characters"}, a.aboutPanel, a.charactersPage);
+            GroupPage fame = new GroupPage(new String[]{"Fame", "Fame Bonuses"}, a.famePage, a.fameBonusPage);
+            GroupPage badges = new GroupPage(new String[]{"Badges", "Titles", "Wardrobe"}, a.badgesPage, a.titlesPage, a.wardrobePage);
+            a.meGroup = new GroupPage(new String[]{"Characters", "Quests", "Fame", "Vault", "Badges"}, chars, a.questsPanel, fame, a.treasuryPage, badges);
+            a.chatGroup = new GroupPage(new String[]{"Chat", "Trades", "Players", "Events", "Realms"}, a.chatPanel, a.tradesPage, a.playersPage, a.eventsPage, a.realmsPage);
+            for (JComponent page : new JComponent[]{bags, collection, chars, fame, badges, a.lootGroup, a.fightsGroup, a.meGroup, a.chatGroup}) {
                 page.putClientProperty("pixel.ownScroll", Boolean.TRUE);
             }
             sheet.add(a.lootGroup, "loot@" + a.index);
             sheet.add(a.fightsGroup, "fights@" + a.index);
             sheet.add(a.meGroup, "me@" + a.index);
             sheet.add(a.chatGroup, "chat@" + a.index);
-            sheet.add(a.eventsPage, "events@" + a.index);
-            sheet.add(a.puzzlePage, "puzzle@" + a.index);
+            sheet.add(a.contestPage, "UPE@" + a.index);
         };
         if (SwingUtilities.isEventDispatchThread()) ui.run();
         else {
@@ -1518,6 +2479,31 @@ public class WhiteBagNotifier {
         return a;
     }
 
+    /** The header search: bags you've had with it (Loot > Bags > All time), else the collection, else the player. */
+    private void findThing(String text) {
+        String q = text == null ? "" : text.trim();
+        if (q.isEmpty() || selected == null) return;
+        Account a = selected;
+        String lower = q.toLowerCase(java.util.Locale.ROOT);
+        for (PlayersTracker.Player p : a.players.players()) {
+            if (p.name().toLowerCase(java.util.Locale.ROOT).contains(lower)) {
+                tabs.select(java.util.Arrays.asList(tabNames).indexOf("chat"));
+                a.chatGroup.jump(2);
+                return;
+            }
+        }
+        tabs.select(java.util.Arrays.asList(tabNames).indexOf("loot"));
+        if (a.lootHistoryPage.has(q)) {
+            a.lootGroup.jump(0);
+            a.bagsGroup.jump(1);
+            a.lootHistoryPage.search(q);
+        } else {
+            a.lootGroup.jump(2);
+            a.collectionGroup.jump(0);
+            a.bookPage.search(q);
+        }
+    }
+
     /** Counts something new on a tab, on the account's own badges if another account is showing (Swing thread). */
     private void bumpTab(Account account, int tab) {
         if (account == selected) {
@@ -1531,7 +2517,11 @@ public class WhiteBagNotifier {
     /** Shows the current tab for the selected account. */
     private void showPage() {
         String name = tabNames[tabs.selected()];
-        pages.show(sheet, name.equals("home") || name.equals("webhooks") ? name : name + "@" + selected.index);
+        pages.show(sheet, name.equals("home") ? name : name + "@" + selected.index);
+        if (!name.equals(settings.getProperty("ui.tab", "home"))) {
+            settings.setProperty("ui.tab", name); // opens here next time
+            saveSettings();
+        }
         sheet.revalidate(); // the sheet is as tall as the page on show
         sheet.repaint();
     }
@@ -1610,8 +2600,18 @@ public class WhiteBagNotifier {
     private void loadSettings() {
         File f = new File(SETTINGS_FILE);
         if (!f.exists()) return;
-        try (InputStream in = new FileInputStream(f)) {
-            settings.load(in);
+        try {
+            // Notepad can save with a byte-order mark or as UTF-16 ("Unicode"): read it either way
+            byte[] b = java.nio.file.Files.readAllBytes(f.toPath());
+            String text;
+            if (b.length >= 2 && (b[0] & 0xFF) == 0xFF && (b[1] & 0xFF) == 0xFE) text = new String(b, 2, b.length - 2, java.nio.charset.StandardCharsets.UTF_16LE);
+            else if (b.length >= 2 && (b[0] & 0xFF) == 0xFE && (b[1] & 0xFF) == 0xFF) text = new String(b, 2, b.length - 2, java.nio.charset.StandardCharsets.UTF_16BE);
+            else if (b.length >= 3 && (b[0] & 0xFF) == 0xEF && (b[1] & 0xFF) == 0xBB && (b[2] & 0xFF) == 0xBF) text = new String(b, 3, b.length - 3, java.nio.charset.StandardCharsets.UTF_8);
+            else text = null;
+            if (text != null) settings.load(new java.io.StringReader(text));
+            else try (InputStream in = new FileInputStream(f)) {
+                settings.load(in);
+            }
         } catch (Exception e) {
             log("*whimper* couldn't read " + SETTINGS_FILE + ": " + e);
         }

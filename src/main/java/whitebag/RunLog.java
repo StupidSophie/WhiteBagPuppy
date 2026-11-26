@@ -49,7 +49,7 @@ final class RunLog {
     static final Set<String> HUBS = new HashSet<>(Arrays.asList(
             "nexus", "guild hall", "pet yard", "daily quest room", "daily login room", "cloth bazaar",
             "nexus explanation", "vault explanation", "guild explanation", "kitchen", "exalted kitchen", "random realm",
-            "interregnum daily quest room", "secluded thicket", ""));
+            "interregnum daily quest room", ""));
     private static final int MIN_SECONDS = 20;
     private static final String FILE = "runs-log.txt";
     private static List<Run> runs;

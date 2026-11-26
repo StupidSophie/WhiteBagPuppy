@@ -34,6 +34,19 @@ public class ItemInfo {
         return e == enchant ? this : new ItemInfo(id, name, rarity, rarityColor, e);
     }
 
+    /** Called with an item id the game files don't know (maybe the game has updated since they were read). */
+    static volatile java.util.function.IntConsumer onUnknown = id -> { };
+
+    /** Items the game gives the same name to, but that are different items: each gets its own name here. */
+    private static final java.util.Map<Integer, String> OWN_NAMES = new java.util.HashMap<>();
+
+    static {
+        OWN_NAMES.put(0x10D4, "Yellow Beehemoth Armor");
+        OWN_NAMES.put(0x10D5, "Red Beehemoth Armor");
+        OWN_NAMES.put(0x10D6, "Blue Beehemoth Armor");
+        OWN_NAMES.put(0x449D, "Green Beehemoth Armor");
+    }
+
     public static ItemInfo of(int id) {
         String name = null, labels = null;
         try {
@@ -53,7 +66,15 @@ public class ItemInfo {
             }
             if (isKey(name)) name = tidy(name);
         }
-        if (name == null || name.isEmpty()) name = "Item #" + id;
+        if (name == null || name.isEmpty()) {
+            name = "Item #" + id;
+            try {
+                onUnknown.accept(id);
+            } catch (Throwable ignored) {
+            }
+        }
+        String own = OWN_NAMES.get(id);
+        if (own != null) name = own;
         ItemXml.Info x = null;
         try {
             x = ItemXml.of(id);
