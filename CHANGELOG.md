@@ -3,6 +3,12 @@
 What's new in each version of White Bag Puppy, newest first.
 Download the latest from [Releases](../../releases/latest).
 
+## 2.30.52
+
+- **Biscuit moved to femcore.gay.** The pup changes your saved Biscuit links (bags, badges, guild deaths, recaps and the
+  friends leaderboard) from the old Railway address to https://femcore.gay by itself when it starts, keeping your code,
+  so there's nothing to paste again.
+
 ## 2.30.51
 
 - **White bags add up across computers.** The friends leaderboard (and femcore.gay) now counts your white bags from

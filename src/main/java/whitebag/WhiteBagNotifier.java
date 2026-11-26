@@ -2615,6 +2615,35 @@ public class WhiteBagNotifier {
         } catch (Exception e) {
             log("*whimper* couldn't read " + SETTINGS_FILE + ": " + e);
         }
+        moveBiscuitLinks();
+    }
+
+    /** Biscuit's old addresses and where it lives now. Its links keep their code, so only the address changes. */
+    private static final String[][] BISCUIT_MOVED = {
+            {"femcore-production.up.railway.app", "femcore.gay"},
+    };
+
+    /** Biscuit moved: point every saved link (bags, badges, deaths, recaps, contest) at the new address, once. */
+    private void moveBiscuitLinks() {
+        int moved = 0;
+        for (String key : settings.stringPropertyNames()) {
+            String value = settings.getProperty(key, "");
+            String updated = value;
+            for (String[] m : BISCUIT_MOVED) {
+                updated = updated.replaceAll("(?i)(https?://)" + java.util.regex.Pattern.quote(m[0]) + "(?=[/?#]|$)", "https://" + m[1]);
+            }
+            if (!updated.equals(value)) {
+                settings.setProperty(key, updated);
+                moved++;
+            }
+        }
+        if (moved == 0) return;
+        try (OutputStream out = new FileOutputStream(SETTINGS_FILE)) {   // the window isn't built yet, so save directly
+            settings.store(out, "White Bag Notifier settings (keep your webhook URL private)");
+        } catch (Exception e) {
+            log("*whimper* couldn't save the new Biscuit address: " + e);
+        }
+        log("*wags tail* Biscuit moved to femcore.gay, so i updated your " + moved + " Biscuit link" + (moved == 1 ? "" : "s") + " to match.");
     }
 
     private synchronized boolean saveSettings() {
