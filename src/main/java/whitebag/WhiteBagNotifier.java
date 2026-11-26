@@ -2623,15 +2623,22 @@ public class WhiteBagNotifier {
             {"femcore-production.up.railway.app", "femcore.gay"},
     };
 
+    /** A link at Biscuit's current address (anything else comes back unchanged). Also used for posts held in the outbox. */
+    static String movedBiscuit(String value) {
+        if (value == null) return null;
+        String updated = value;
+        for (String[] m : BISCUIT_MOVED) {
+            updated = updated.replaceAll("(?i)(https?://)" + java.util.regex.Pattern.quote(m[0]) + "(?=[/?#]|$)", "https://" + m[1]);
+        }
+        return updated;
+    }
+
     /** Biscuit moved: point every saved link (bags, badges, deaths, recaps, contest) at the new address, once. */
     private void moveBiscuitLinks() {
         int moved = 0;
         for (String key : settings.stringPropertyNames()) {
             String value = settings.getProperty(key, "");
-            String updated = value;
-            for (String[] m : BISCUIT_MOVED) {
-                updated = updated.replaceAll("(?i)(https?://)" + java.util.regex.Pattern.quote(m[0]) + "(?=[/?#]|$)", "https://" + m[1]);
-            }
+            String updated = movedBiscuit(value);
             if (!updated.equals(value)) {
                 settings.setProperty(key, updated);
                 moved++;

@@ -87,7 +87,8 @@ final class Outbox {
                     delete(meta, bodyFile);
                     continue;
                 }
-                int code = send(m[0], m[1], Files.readAllBytes(bodyFile.toPath()));
+                // held while Biscuit was at its old address: it moved (same code), so it goes to the new one
+                int code = send(WhiteBagNotifier.movedBiscuit(m[0]), m[1], Files.readAllBytes(bodyFile.toPath()));
                 if (code >= 200 && code < 300) {
                     log.log("*finally drops it at Biscuit's feet* sent the " + what + " I was holding! *proud tail wag*");
                     delete(meta, bodyFile);
