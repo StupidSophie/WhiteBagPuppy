@@ -3,6 +3,12 @@
 What's new in each version of White Bag Puppy, newest first.
 Download the latest from [Releases](../../releases/latest).
 
+## 2.30.56
+
+- **Posts held for Biscuit go to femcore.gay.** Bags, badges and deaths the pup was holding while Biscuit was down
+  (in the outbox folder) were still addressed to the old Railway address, so they'd never go through; they go to
+  femcore.gay now. Loot Puppy's Biscuit link moves there too.
+
 ## 2.30.55
 
 - **Shiny white bags on femcore.gay/whites.** A shiny UT or ST now counts as the item that made a bag white (the game

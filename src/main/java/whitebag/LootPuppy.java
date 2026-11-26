@@ -115,6 +115,14 @@ public final class LootPuppy {
             settings.load(in);
         } catch (Exception ignored) {
         }
+        String link = settings.getProperty("webhook.url");
+        if (link != null && !link.equals(WhiteBagNotifier.movedBiscuit(link))) {
+            settings.setProperty("webhook.url", WhiteBagNotifier.movedBiscuit(link)); // Biscuit moved (same code, new address)
+            try (OutputStream out = new FileOutputStream(SETTINGS)) {
+                settings.store(out, "Loot Puppy settings (your webhook URL is in here: keep this file to yourself)");
+            } catch (Exception ignored) {
+            }
+        }
         String w = settings.getProperty("bags", "WHITE");
         for (String n : w.split(",")) {
             for (BagType[] c : COLOURS) if (c[0].name().equals(n.trim())) for (BagType t : c) watched.add(t);
