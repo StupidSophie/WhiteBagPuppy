@@ -31,6 +31,8 @@ public class BagDrop {
     /** Who looted it (your class, object type) and which enemy dropped it, for Loot History. */
     volatile int charClass = -1;
     volatile int charId = -1;
+    /** Whether the character that looted it is seasonal: 1 yes, 0 no, -1 not known. */
+    volatile int seasonal = -1;
     volatile String enemy = "";
     volatile String note;
     /** Extra lines under the note (Loot Puppy's contest points), or null. */

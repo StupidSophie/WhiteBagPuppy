@@ -28,6 +28,8 @@ final class LootStats {
         /** Who looted it (class object type, character id; -1 for older bags) and which enemy dropped it ("" unknown). */
         int charClass = -1, charId = -1;
         String enemy = "";
+        /** Whether the looting character was seasonal: 1 yes, 0 no, -1 not recorded (bags from before 2.30.54). */
+        int seasonal = -1;
 
         String line() {
             StringBuilder sb = new StringBuilder();
@@ -41,7 +43,7 @@ final class LootStats {
                 rs.append(r);
             }
             return at + "|" + type.name() + "|" + map.replace('|', '/') + "|" + sb + "|" + account.replace('|', '/') + "|" + rs
-                    + "|" + charClass + "|" + enemy.replace('|', '/').replace('\n', ' ') + "|" + charId;
+                    + "|" + charClass + "|" + enemy.replace('|', '/').replace('\n', ' ') + "|" + charId + "|" + seasonal;
         }
 
         static Entry parse(String l) {
@@ -58,6 +60,7 @@ final class LootStats {
                 if (f.length >= 7 && !f[6].trim().isEmpty()) e.charClass = Integer.parseInt(f[6].trim());
                 if (f.length >= 8) e.enemy = f[7];
                 if (f.length >= 9 && !f[8].trim().isEmpty()) e.charId = Integer.parseInt(f[8].trim());
+                if (f.length >= 10 && !f[9].trim().isEmpty()) e.seasonal = Integer.parseInt(f[9].trim());
                 return e;
             } catch (Exception ex) {
                 return null;
@@ -93,6 +96,7 @@ final class LootStats {
         e.map = drop.mapName == null ? "" : drop.mapName;
         e.charClass = drop.charClass;
         e.charId = drop.charId;
+        e.seasonal = drop.seasonal;
         e.enemy = drop.enemy == null ? "" : drop.enemy;
         for (ItemInfo i : drop.items()) {
             e.items.add(i.id);
@@ -104,6 +108,17 @@ final class LootStats {
                     StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (Exception ignored) {
         }
+    }
+
+    /**
+     * Whether this bag was looted by a seasonal character. Bags from 2.30.54 on say so themselves; for older ones it's
+     * worked out from the character the pup last saw with that id (false if it never saw it).
+     */
+    static boolean seasonal(Entry e) {
+        if (e.seasonal >= 0) return e.seasonal == 1;
+        if (e.charId < 0) return false;
+        CharacterBags.Char c = CharacterBags.get(e.account, e.charId);
+        return c != null && c.seasonal;
     }
 
     /** The bag colour without "Boosted", so a boosted white counts as a white. */

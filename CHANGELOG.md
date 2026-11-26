@@ -3,6 +3,13 @@
 What's new in each version of White Bag Puppy, newest first.
 Download the latest from [Releases](../../releases/latest).
 
+## 2.30.54
+
+- **Seasonal white bags on femcore.gay/whites.** When a bag drops, the pup now notes whether the character that looted
+  it is seasonal (in loot-log.txt), and tells Biscuit which of your white bags were seasonal. Bags from before this
+  version are worked out from the character the pup last saw. The white bag page shows a 🍃 on seasonal drops, and a
+  season card with a countdown to the end of the season and each member's seasonal white bags.
+
 ## 2.30.53
 
 - **The right item on femcore.gay/whites.** White bags can hold potions too, so the white bag page sometimes showed a
