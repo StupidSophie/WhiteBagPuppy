@@ -3,6 +3,9 @@
 What's new in each version of White Bag Puppy, newest first.
 Download the latest from [Releases](../../releases/latest).
 
+## 2.30.50
+- Who's online also counts guildmates who only walked past you between updates (a busy Nexus, someone running by in a realm), not just the ones in view at that moment.
+
 ## 2.30.49
 - Which server you're on: the pup works it out from the realm names on atti.network (after a realm or two on a new server) and remembers it in server-ips.txt, then says it in the diary. It goes to Biscuit with who's online, for guildmates near you too, so /online and /offline show the server.
 
