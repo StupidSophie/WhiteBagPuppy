@@ -3,6 +3,11 @@
 What's new in each version of White Bag Puppy, newest first.
 Download the latest from [Releases](../../releases/latest).
 
+## 2.30.53
+
+- **The right item on femcore.gay/whites.** White bags can hold potions too, so the white bag page sometimes showed a
+  potion. The pup now tells Biscuit which UT or ST item made each bag white, and its rarity, so the page shows that.
+
 ## 2.30.52
 
 - **Biscuit moved to femcore.gay.** The pup changes your saved Biscuit links (bags, badges, guild deaths, recaps and the

@@ -84,12 +84,24 @@ final class Leaderboard {
         // each white bag's fingerprint (when it dropped + its first item), so the bot can add up bags from every
         // computer you play on without counting one twice
         java.util.Set<String> whiteKeys = new java.util.TreeSet<>();
+        // for the website's white bag page: which item made each bag white (and its rarity), newest 5000 bags
+        java.util.LinkedHashMap<String, String> whiteItems = new java.util.LinkedHashMap<String, String>() {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
+                return size() > 5000;
+            }
+        };
         for (LootStats.Entry e : LootStats.all()) {
             if (!mine.test(e.account)) continue;
             bags.add(e);
             boolean white = LootStats.colour(e.type) == BagType.WHITE;
             if (white) allWhites++;
-            if (white && whiteKeys.size() < 20000) whiteKeys.add(e.at + "-" + (e.items.isEmpty() ? 0 : e.items.get(0)));
+            if (white && whiteKeys.size() < 20000) {
+                String key = e.at + "-" + (e.items.isEmpty() ? 0 : e.items.get(0));
+                whiteKeys.add(key);
+                String item = whiteItem(e);
+                if (item != null) whiteItems.put(key, item);
+            }
             life.bags++;
             if (white) life.whites++;
             life.colours.merge(LootStats.colour(e.type), 1L, Long::sum);
@@ -144,6 +156,14 @@ final class Leaderboard {
         StringBuilder a = new StringBuilder();
         numbers(a, all);
         String lifeJson = a.substring(a.indexOf(":{") + 2, a.length() - 2); // the numbers inside {"all":{...}}
+        j.append(",\"whiteItems\":{");
+        boolean firstItem = true;
+        for (Map.Entry<String, String> w : whiteItems.entrySet()) {
+            if (!firstItem) j.append(',');
+            firstItem = false;
+            j.append('"').append(w.getKey()).append("\":\"").append(w.getValue()).append('"');
+        }
+        j.append('}');
         j.append(",\"whiteBags\":[");
         boolean firstKey = true;
         for (String k : whiteKeys) {
@@ -213,5 +233,27 @@ final class Leaderboard {
         } catch (Exception e) {
             return "couldn't reach the bot (" + e.getMessage() + ")";
         }
+    }
+
+    /**
+     * The item that made a white bag white, as "id:enchant level:tag" (tag UT or ST), or null if none is known. White
+     * bags can also hold potions, so the first item isn't always the one that matters.
+     */
+    static String whiteItem(LootStats.Entry e) {
+        for (String want : new String[]{"UT", "ST"}) {
+            for (int i = 0; i < e.items.size(); i++) {
+                ItemInfo info;
+                try {
+                    info = ItemInfo.of(e.items.get(i));
+                } catch (Throwable t) {
+                    continue;
+                }
+                if (info != null && want.equals(info.rarity)) {
+                    int enchant = i < e.rarity.size() ? Math.max(0, Math.min(4, e.rarity.get(i))) : 0;
+                    return e.items.get(i) + ":" + enchant + ":" + want;
+                }
+            }
+        }
+        return null;
     }
 }
