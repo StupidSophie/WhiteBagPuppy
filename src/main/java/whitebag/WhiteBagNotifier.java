@@ -685,6 +685,16 @@ public class WhiteBagNotifier {
         return null;
     }
 
+    /** Sends Biscuit the game's pictures of items femcore.gay is missing (ItemPictures). */
+    private void shareItemPictures() {
+        for (String u : new String[]{settings.getProperty("webhook.url", ""), settings.getProperty("deaths.url", ""), settings.getProperty("badges.url", "")}) {
+            if (ItemPictures.baseAndCode(u) != null) {
+                ItemPictures.share(u, this::log);
+                return;
+            }
+        }
+    }
+
     /** Names this pup said were online (account -> name), so it can say when they stop. */
     private final java.util.Map<Account, String> onlineSaid = new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -1406,6 +1416,7 @@ public class WhiteBagNotifier {
                 boolean changed = Recap.tick(settings, (json, files, what) -> webhook.sendJson(u, json, files, what), this::log);
                 if (leaderboardTick++ % 10 == 0) sendLeaderboard(false);
                 sendOnline();
+                if (leaderboardTick % 30 == 3) shareItemPictures(); // a few minutes after starting, then every half hour
                 for (Account a : accounts) a.noteCharacterItems();
                 if (leaderboardTick % 360 == 0) SwingUtilities.invokeLater(this::checkForUpdate); // every 6 hours
                 if (Backup.weeklyDue(settings)) {
