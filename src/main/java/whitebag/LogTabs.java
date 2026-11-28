@@ -765,6 +765,33 @@ final class LogTabs {
             return new Dimension(400, HEAD + COLS + b.rows.size() * ROW + 22);
         }
 
+        /**
+         * Draws an item picture in the middle of a box: the see-through edges trimmed off (sprites rarely sit in the
+         * middle of their own picture), as big as fits in {@code fit} pixels without changing its shape.
+         */
+        static void drawCentered(Graphics2D g, java.awt.image.BufferedImage img, int boxX, int boxY, int box, int fit) {
+            if (img == null) return;
+            int x0 = img.getWidth(), y0 = img.getHeight(), x1 = -1, y1 = -1;
+            for (int yy = 0; yy < img.getHeight(); yy++) {
+                for (int xx = 0; xx < img.getWidth(); xx++) {
+                    if ((img.getRGB(xx, yy) >>> 24) == 0) continue;
+                    x0 = Math.min(x0, xx);
+                    y0 = Math.min(y0, yy);
+                    x1 = Math.max(x1, xx);
+                    y1 = Math.max(y1, yy);
+                }
+            }
+            if (x1 < 0) return;
+            int cw = x1 - x0 + 1, ch = y1 - y0 + 1;
+            double k = (double) fit / Math.max(cw, ch);
+            int dw = Math.max(1, (int) Math.round(cw * k)), dh = Math.max(1, (int) Math.round(ch * k));
+            int dx = boxX + (box - dw) / 2, dy = boxY + (box - dh) / 2;
+            Object hint = g.getRenderingHint(RenderingHints.KEY_INTERPOLATION);
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+            g.drawImage(img, dx, dy, dx + dw, dy + dh, x0, y0, x1 + 1, y1 + 1, null);
+            if (hint != null) g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, hint);
+        }
+
         @Override
         public Dimension getMaximumSize() {
             return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
@@ -854,8 +881,7 @@ final class LogTabs {
                             Color fc = sl != null && !sl.isEmpty() && sl.size() <= 4 ? Enchant.values()[sl.size()].color : null;
                             Pixel.frame(g, gx, y + 19, ICON + 4, ICON + 4, Pixel.TRACK, fc, fc == null ? 0 : 2);
                             if (id > 0) {
-                                java.awt.image.BufferedImage img = AboutMe.sprite(id, ICON);
-                                if (img != null) g.drawImage(img, gx + 2, y + 21, ICON, ICON, null);
+                                drawCentered(g, AboutMe.sprite(id, ICON), gx, y + 19, ICON + 4, ICON);
                                 boxes.add(new int[]{gx, y + 19, ICON + 4, ICON + 4, id, rank - 1, k});
                             }
                             gx += ICON + 6;
